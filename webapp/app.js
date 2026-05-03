@@ -9,6 +9,7 @@
 const state = {
   port:         null,
   writer:       null,
+  reader:       null,
   readBuffer:   '',
   encKey:       '',
   currentSlot:  1,         // 1-5
@@ -43,10 +44,25 @@ function waitFor(prefix, timeoutMs = 10000) {
 }
 
 // ── Serial connection ─────────────────────────────────────────────────────────
+async function closeSerial() {
+  try { if (state.reader) { await state.reader.cancel(); } } catch (_) {}
+  try { if (state.writer) { state.writer.releaseLock(); }  } catch (_) {}
+  try { if (state.port)   { await state.port.close(); }    } catch (_) {}
+  state.reader = null;
+  state.writer = null;
+  state.port   = null;
+  state.readBuffer = '';
+}
+
 async function connectSerial() {
   const port = await navigator.serial.requestPort();
-  await port.open({ baudRate: 115200 });
 
+  // If this port is already open from a previous failed attempt, close it first.
+  if (port.readable) {
+    await closeSerial();
+  }
+
+  await port.open({ baudRate: 115200 });
   state.port   = port;
   state.writer = port.writable.getWriter();
 
@@ -58,6 +74,7 @@ async function _readLoop(port) {
   const decoder = new TextDecoderStream();
   port.readable.pipeTo(decoder.writable);
   const reader  = decoder.readable.getReader();
+  state.reader  = reader;   // store so closeSerial() can cancel it
 
   try {
     while (true) {
@@ -73,6 +90,7 @@ async function _readLoop(port) {
     }
   } finally {
     reader.releaseLock();
+    state.reader = null;
   }
 }
 
@@ -136,6 +154,7 @@ document.getElementById('btn-connect').addEventListener('click', async () => {
 
     goToStep(1);
   } catch (e) {
+    await closeSerial();   // clean up so the next attempt starts fresh
     btn.disabled    = false;
     btn.textContent = 'Connect Dongle';
     if (e.name !== 'NotFoundError') {          // user cancelled picker = silent
