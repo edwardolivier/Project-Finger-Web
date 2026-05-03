@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Password Dongle — Recovery</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --navy: #1a2744; --blue: #2563eb; --blue-l: #eff6ff;
+      --green: #059669; --green-l: #ecfdf5;
+      --red: #dc2626; --red-l: #fef2f2;
+      --amber: #d97706; --amber-l: #fffbeb;
+      --gray-1: #f1f5f9; --gray-2: #e2e8f0; --gray-3: #94a3b8; --gray-4: #475569;
+      --text: #1e293b;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--gray-1); color: var(--text); min-height: 100vh; line-height: 1.6;
+    }
+    header {
+      background: var(--navy); color: #fff; padding: .9rem 1.5rem;
+    }
+    .header-inner { max-width: 700px; margin: 0 auto; display: flex; align-items: baseline; gap: 1rem; }
+    .brand { font-size: 1.15rem; font-weight: 700; }
+    .header-sub { font-size: .85rem; color: #fca5a5; }
+
+    main { max-width: 700px; margin: 2rem auto; padding: 0 1rem; }
+
+    .card {
+      background: #fff; border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0,0,0,.10); padding: 2rem; margin-bottom: 1.5rem;
+    }
+    h1 { font-size: 1.6rem; margin-bottom: .4rem; }
+    h2 { font-size: 1.15rem; margin-bottom: .75rem; }
+    p  { color: var(--gray-4); margin-bottom: .9rem; }
+
+    .alert {
+      border-radius: 8px; padding: .85rem 1.1rem; font-size: .92rem;
+      margin-bottom: 1.25rem; line-height: 1.55;
+    }
+    .alert-red   { background: var(--red-l);   color: #991b1b; border-left: 3px solid var(--red); }
+    .alert-amber { background: var(--amber-l); color: #92400e; border-left: 3px solid var(--amber); }
+    .alert-blue  { background: var(--blue-l);  color: #1e40af; border-left: 3px solid var(--blue); }
+
+    /* Step list */
+    .step-list { counter-reset: steps; list-style: none; display: flex; flex-direction: column; gap: 1.1rem; margin: 1.25rem 0; }
+    .step-list li {
+      counter-increment: steps;
+      display: flex; gap: 1rem; align-items: flex-start;
+    }
+    .step-list li::before {
+      content: counter(steps);
+      min-width: 32px; height: 32px; border-radius: 50%;
+      background: var(--navy); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .85rem; font-weight: 700; flex-shrink: 0; margin-top: .1rem;
+    }
+    .step-list li .step-body { flex: 1; }
+    .step-list li .step-title { font-weight: 600; margin-bottom: .2rem; font-size: .97rem; }
+    .step-list li .step-desc  { color: var(--gray-4); font-size: .9rem; }
+
+    .code-block {
+      background: #1e293b; color: #e2e8f0; border-radius: 8px;
+      padding: .65rem 1rem; font-family: monospace; font-size: .9rem;
+      margin: .5rem 0; display: block; overflow-x: auto;
+    }
+
+    .btn-primary {
+      display: inline-block; background: var(--blue); color: #fff;
+      padding: .75rem 1.75rem; border-radius: 8px; font-size: .97rem;
+      font-weight: 600; text-decoration: none; border: none; cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-outline {
+      display: inline-block; border: 1.5px solid var(--blue); color: var(--blue);
+      padding: .7rem 1.6rem; border-radius: 8px; font-size: .95rem;
+      font-weight: 600; text-decoration: none; background: #fff;
+      transition: background .15s;
+    }
+    .btn-outline:hover { background: var(--blue-l); }
+
+    .actions { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1.25rem; }
+
+    /* Phase tabs */
+    .phase { border: 1.5px solid var(--gray-2); border-radius: 10px; overflow: hidden; margin-bottom: 1rem; }
+    .phase-header {
+      background: var(--gray-1); padding: .75rem 1.1rem;
+      font-weight: 700; font-size: .95rem; display: flex; gap: .6rem; align-items: center;
+    }
+    .phase-num {
+      background: var(--navy); color: #fff; width: 24px; height: 24px;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: .75rem; font-weight: 700; flex-shrink: 0;
+    }
+    .phase-body { padding: 1rem 1.1rem; }
+
+    /* WebSerial section (future) */
+    #webserial-section { display: none; }   /* unhide when WebUSB automation is built */
+
+    .divider { border: none; border-top: 1px solid var(--gray-2); margin: 1.5rem 0; }
+
+    .small { font-size: .85rem; color: var(--gray-3); }
+    a { color: var(--blue); }
+
+    @media (max-width: 500px) {
+      .actions { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <span class="brand">Password Dongle</span>
+    <span class="header-sub">Device Recovery</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- What happened -->
+  <div class="card">
+    <h1>Device Locked Out</h1>
+    <p>Your dongle wiped itself after five failed fingerprint attempts. All fingerprint templates and passwords have been erased. The device is safe — nothing was leaked — but it needs to be reset and re-enrolled before it can be used again.</p>
+
+    <div class="alert alert-amber">
+      You will need to re-enroll all fingers and re-enter your passwords. Your secret key can stay the same or you can choose a new one.
+    </div>
+  </div>
+
+  <!-- Recovery phases -->
+  <div class="card">
+    <h2>Recovery Steps</h2>
+    <p>Follow these four phases in order. The whole process takes about 10 minutes.</p>
+
+    <!-- Phase A -->
+    <div class="phase">
+      <div class="phase-header">
+        <div class="phase-num">A</div>
+        Enter BOOTSEL Mode
+      </div>
+      <div class="phase-body">
+        <ol class="step-list">
+          <li>
+            <div class="step-body">
+              <div class="step-title">Unplug the dongle</div>
+              <div class="step-desc">Remove it from the USB port completely.</div>
+            </div>
+          </li>
+          <li>
+            <div class="step-body">
+              <div class="step-title">Hold the BOOTSEL button</div>
+              <div class="step-desc">Press and hold the small white button on the Raspberry Pi Pico. Keep holding it while you plug the dongle back in.</div>
+            </div>
+          </li>
+          <li>
+            <div class="step-body">
+              <div class="step-title">Confirm the drive appears</div>
+              <div class="step-desc">A drive named <strong>RPI-RP2</strong> will appear in your file explorer. You can now release the button.</div>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- Phase B -->
+    <div class="phase">
+      <div class="phase-header">
+        <div class="phase-num">B</div>
+        Wipe the Flash
+      </div>
+      <div class="phase-body">
+        <p style="margin-bottom:.6rem">This clears any remaining data and firmware from the Pico.</p>
+        <ol class="step-list">
+          <li>
+            <div class="step-body">
+              <div class="step-title">Download flash_nuke.uf2</div>
+              <div class="step-desc">
+                Get it from the Raspberry Pi documentation website (search for <strong>"flash_nuke.uf2"</strong> on raspberrypi.com), or use the copy in your project's <code>0. reset</code> folder if you have it to hand.
+              </div>
+            </div>
+          </li>
+          <li>
+            <div class="step-body">
+              <div class="step-title">Copy it onto RPI-RP2</div>
+              <div class="step-desc">Drag and drop <code>flash_nuke.uf2</code> onto the RPI-RP2 drive. The Pico will reboot — the drive disappears for a second and then reappears.</div>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- Phase C -->
+    <div class="phase">
+      <div class="phase-header">
+        <div class="phase-num">C</div>
+        Reinstall CircuitPython
+      </div>
+      <div class="phase-body">
+        <ol class="step-list">
+          <li>
+            <div class="step-body">
+              <div class="step-title">Get the CircuitPython UF2</div>
+              <div class="step-desc">
+                Download the latest CircuitPython 10.x UF2 for <strong>Raspberry Pi Pico (RP2040)</strong> from <a href="https://circuitpython.org/downloads" target="_blank" rel="noopener">circuitpython.org/downloads</a>. Use the copy in your <code>0. reset</code> folder if you already have one.
+              </div>
+            </div>
+          </li>
+          <li>
+            <div class="step-body">
+              <div class="step-title">Copy it onto RPI-RP2</div>
+              <div class="step-desc">Drag the CircuitPython UF2 onto the RPI-RP2 drive. The Pico reboots and a new drive called <strong>CIRCUITPY</strong> appears.</div>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- Phase D -->
+    <div class="phase">
+      <div class="phase-header">
+        <div class="phase-num">D</div>
+        Reinstall Firmware Files
+      </div>
+      <div class="phase-body">
+        <ol class="step-list">
+          <li>
+            <div class="step-body">
+              <div class="step-title">Copy boot.py and code.py</div>
+              <div class="step-desc">
+                From your project's <code>firmware/</code> folder, copy <code>boot.py</code> and <code>code.py</code> to the root of the <strong>CIRCUITPY</strong> drive.
+              </div>
+            </div>
+          </li>
+          <li>
+            <div class="step-body">
+              <div class="step-title">Copy the lib folder</div>
+              <div class="step-desc">
+                From your project's <code>0. reset/lib/</code> folder, copy the contents into <strong>CIRCUITPY/lib/</strong>. You need:
+                <ul style="margin-top:.4rem;margin-left:1.2rem;color:#475569;font-size:.9rem">
+                  <li>adafruit_fingerprint.mpy</li>
+                  <li>adafruit_hid/ (full folder)</li>
+                  <li>adafruit_bus_device/ (full folder)</li>
+                </ul>
+              </div>
+            </div>
+          </li>
+          <li>
+            <div class="step-body">
+              <div class="step-title">Unplug and replug</div>
+              <div class="step-desc">The dongle LED should glow <strong>yellow</strong>, indicating it is in setup mode and ready to be configured again.</div>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Go to setup wizard -->
+  <div class="card">
+    <h2>Ready to Re-Enrol?</h2>
+    <p>Once the LED is glowing yellow, open the setup wizard to configure your fingers and passwords again.</p>
+
+    <div class="alert alert-blue">
+      You can use the same secret key as before, or choose a new one. Either way you will need to re-enter all your passwords.
+    </div>
+
+    <div class="actions">
+      <a href="../webapp/" class="btn-primary">Open Setup Wizard</a>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <!-- Future: automated recovery note -->
+  <div class="card" id="future-note">
+    <h2>Automated Recovery (Coming Soon)</h2>
+    <p>A future version of this page will be able to detect your device in BOOTSEL mode and flash the firmware automatically from your browser — no manual file copying needed. For now, follow the manual steps above.</p>
+  </div>
+
+  <p class="small" style="text-align:center;margin-bottom:2rem">
+    Password Dongle &mdash; consumer build
+  </p>
+
+</main>
+
+</body>
+</html>
