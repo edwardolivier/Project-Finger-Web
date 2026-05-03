@@ -148,9 +148,28 @@ document.getElementById('btn-connect').addEventListener('click', async () => {
   try {
     await connectSerial();
 
-    // Ping the device to confirm it is in setup mode
-    await send('PING');
-    await waitFor('PONG', 5000);
+    // The Pico takes a few seconds to initialise the fingerprint sensor before
+    // it can process commands. Wait, then retry PING up to 4 times.
+    btn.textContent = 'Waiting for device...';
+    await new Promise(r => setTimeout(r, 2000));
+
+    let ponged = false;
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      if (attempt > 1) {
+        btn.textContent = `Retrying... (${attempt} of 4)`;
+        await new Promise(r => setTimeout(r, 2000));
+      }
+      try {
+        await send('PING');
+        await waitFor('PONG', 3000);
+        ponged = true;
+        break;
+      } catch (_) { /* try again */ }
+    }
+
+    if (!ponged) {
+      throw new Error('Device not responding. Make sure the dongle LED is yellow and you selected the correct port.');
+    }
 
     goToStep(1);
   } catch (e) {
@@ -158,7 +177,7 @@ document.getElementById('btn-connect').addEventListener('click', async () => {
     btn.disabled    = false;
     btn.textContent = 'Connect Dongle';
     if (e.name !== 'NotFoundError') {          // user cancelled picker = silent
-      showAlert('connect-error', `Could not connect: ${e.message}. Make sure the dongle LED is yellow and try again.`);
+      showAlert('connect-error', e.message);
     }
   }
 });
