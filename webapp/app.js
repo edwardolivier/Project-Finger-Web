@@ -9,7 +9,6 @@
 const state = {
   port:         null,
   writer:       null,
-  reader:       null,
   readBuffer:   '',
   encKey:       '',
   currentSlot:  1,         // 1-5
@@ -44,25 +43,10 @@ function waitFor(prefix, timeoutMs = 10000) {
 }
 
 // ── Serial connection ─────────────────────────────────────────────────────────
-async function closeSerial() {
-  try { if (state.reader) { await state.reader.cancel(); } } catch (_) {}
-  try { if (state.writer) { state.writer.releaseLock(); }  } catch (_) {}
-  try { if (state.port)   { await state.port.close(); }    } catch (_) {}
-  state.reader = null;
-  state.writer = null;
-  state.port   = null;
-  state.readBuffer = '';
-}
-
 async function connectSerial() {
   const port = await navigator.serial.requestPort();
-
-  // If this port is already open from a previous failed attempt, close it first.
-  if (port.readable) {
-    await closeSerial();
-  }
-
   await port.open({ baudRate: 115200 });
+
   state.port   = port;
   state.writer = port.writable.getWriter();
 
@@ -74,7 +58,6 @@ async function _readLoop(port) {
   const decoder = new TextDecoderStream();
   port.readable.pipeTo(decoder.writable);
   const reader  = decoder.readable.getReader();
-  state.reader  = reader;   // store so closeSerial() can cancel it
 
   try {
     while (true) {
@@ -90,7 +73,6 @@ async function _readLoop(port) {
     }
   } finally {
     reader.releaseLock();
-    state.reader = null;
   }
 }
 
@@ -148,36 +130,16 @@ document.getElementById('btn-connect').addEventListener('click', async () => {
   try {
     await connectSerial();
 
-    // The Pico takes a few seconds to initialise the fingerprint sensor before
-    // it can process commands. Wait, then retry PING up to 4 times.
-    btn.textContent = 'Waiting for device...';
-    await new Promise(r => setTimeout(r, 2000));
-
-    let ponged = false;
-    for (let attempt = 1; attempt <= 4; attempt++) {
-      if (attempt > 1) {
-        btn.textContent = `Retrying... (${attempt} of 4)`;
-        await new Promise(r => setTimeout(r, 2000));
-      }
-      try {
-        await send('PING');
-        await waitFor('PONG', 3000);
-        ponged = true;
-        break;
-      } catch (_) { /* try again */ }
-    }
-
-    if (!ponged) {
-      throw new Error('Device not responding. Make sure the dongle LED is yellow and you selected the correct port.');
-    }
+    // Ping the device to confirm it is in setup mode
+    await send('PING');
+    await waitFor('PONG', 5000);
 
     goToStep(1);
   } catch (e) {
-    await closeSerial();   // clean up so the next attempt starts fresh
     btn.disabled    = false;
     btn.textContent = 'Connect Dongle';
     if (e.name !== 'NotFoundError') {          // user cancelled picker = silent
-      showAlert('connect-error', e.message);
+      showAlert('connect-error', `Could not connect: ${e.message}. Make sure the dongle LED is yellow and try again.`);
     }
   }
 });
