@@ -130,19 +130,26 @@ document.getElementById('btn-connect').addEventListener('click', async () => {
   try {
     await connectSerial();
 
-    // Opening the port can trigger a CircuitPython restart.
-    // Wait for READY:SETUP_MODE (device just booted), or fall through after
-    // a short pause if the device was already running when we connected.
-    try {
-      await waitFor('READY:SETUP_MODE', 4000);
-    } catch (_) {
-      // Device was already running — give it a moment then continue.
-      await new Promise(r => setTimeout(r, 300));
+    // Retry PING to handle the case where opening the port triggers a
+    // CircuitPython restart (device takes ~2s to reboot).
+    // Attempt 1: immediately (device already running)
+    // Attempts 2-4: after growing delays (device just reset)
+    const delays = [0, 1500, 2000, 2500];
+    let ponged = false;
+    for (let i = 0; i < delays.length; i++) {
+      if (delays[i]) await new Promise(r => setTimeout(r, delays[i]));
+      try {
+        await send('PING');
+        await waitFor('PONG', 2000);
+        ponged = true;
+        break;
+      } catch (_) {
+        if (i < delays.length - 1) {
+          btn.textContent = `Connecting… (${i + 2}/${delays.length})`;
+        }
+      }
     }
-
-    // Ping the device to confirm it is in setup mode
-    await send('PING');
-    await waitFor('PONG', 5000);
+    if (!ponged) throw new Error('Timeout waiting for "PONG"');
 
     goToStep(1);
   } catch (e) {
