@@ -321,6 +321,11 @@ document.getElementById('btn-key-next').addEventListener('click', async () => {
     await send(`SET_KEY:${key}`);
     await waitFor('OK:KEY_SET', 6000);
     state.encKey = key;
+
+    const maxFails = document.getElementById('input-max-fails').value;
+    await send(`SET_MAX_FAILS:${maxFails}`);
+    await waitFor('OK:MAX_FAILS_SET', 6000);
+
     goToStep(2);
     _renderFingerStep(1);
   } catch (e) {
