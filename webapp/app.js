@@ -130,6 +130,16 @@ document.getElementById('btn-connect').addEventListener('click', async () => {
   try {
     await connectSerial();
 
+    // Opening the port can trigger a CircuitPython restart.
+    // Wait for READY:SETUP_MODE (device just booted), or fall through after
+    // a short pause if the device was already running when we connected.
+    try {
+      await waitFor('READY:SETUP_MODE', 4000);
+    } catch (_) {
+      // Device was already running — give it a moment then continue.
+      await new Promise(r => setTimeout(r, 300));
+    }
+
     // Ping the device to confirm it is in setup mode
     await send('PING');
     await waitFor('PONG', 5000);
