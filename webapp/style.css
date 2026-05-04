@@ -449,6 +449,106 @@ input::placeholder { color: var(--gray-3); }
 .small-text { font-size: .85rem; color: var(--gray-3); margin-top: 1rem; }
 .small-text a { color: var(--blue); }
 
+/* ── Password Generator ──────────────────────────────────────────────────── */
+.gen-trigger {
+  display: inline-block;
+  margin-top: .45rem;
+}
+
+.gen-panel {
+  background: var(--gray-1);
+  border: 1.5px solid var(--gray-2);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  margin-top: .6rem;
+}
+
+.gen-tabs {
+  display: flex;
+  gap: .5rem;
+  margin-bottom: .85rem;
+}
+
+.gen-tab {
+  flex: 1;
+  padding: .4rem .5rem;
+  border: 1.5px solid var(--gray-2);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--gray-4);
+  font-size: .82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+
+.gen-tab.active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+
+.gen-length-row { margin-bottom: .85rem; }
+
+.gen-length-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: .82rem;
+  color: var(--gray-4);
+  margin-bottom: .35rem;
+}
+
+.gen-length-header strong { color: var(--text); font-size: .92rem; }
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+
+.gen-output-row {
+  display: flex;
+  gap: .4rem;
+  align-items: center;
+  margin-bottom: .75rem;
+}
+
+.gen-output {
+  flex: 1;
+  min-width: 0;
+  font-family: monospace !important;
+  font-size: .88rem !important;
+  background: #fff !important;
+}
+
+.btn-sm {
+  flex-shrink: 0;
+  padding: .38rem .65rem;
+  border: 1.5px solid var(--gray-2);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--gray-4);
+  font-size: .8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s;
+}
+
+.btn-sm:hover { background: var(--gray-2); }
+
+.gen-footer { display: flex; justify-content: flex-end; }
+
+.btn-gen-use {
+  background: var(--blue);
+  color: #fff;
+  border-color: var(--blue);
+  padding: .45rem 1.1rem;
+  font-size: .88rem;
+}
+
+.btn-gen-use:hover { background: var(--blue-d); border-color: var(--blue-d); }
+
 /* ── Responsive tweaks ───────────────────────────────────────────────────── */
 @media (max-width: 500px) {
   .card { padding: 1.5rem 1.25rem; }

@@ -131,6 +131,30 @@
             <input id="finger-password" type="password" placeholder="The exact text to type when this finger is scanned">
             <button class="toggle-pw" data-target="finger-password" type="button">Show</button>
           </div>
+          <button id="btn-generate" class="btn-link gen-trigger" type="button">Generate password</button>
+        </div>
+
+        <!-- Password Generator Panel -->
+        <div id="gen-panel" class="gen-panel" style="display:none">
+          <div class="gen-tabs">
+            <button class="gen-tab active" data-mode="random" type="button">Random</button>
+            <button class="gen-tab" data-mode="passphrase" type="button">Passphrase</button>
+          </div>
+          <div class="gen-length-row">
+            <div class="gen-length-header">
+              <span>Length</span>
+              <span><strong id="gen-length-val">16</strong> <span id="gen-length-unit">characters</span></span>
+            </div>
+            <input type="range" id="gen-length" min="8" max="32" value="16">
+          </div>
+          <div class="gen-output-row">
+            <input type="password" id="gen-output" class="gen-output" readonly placeholder="—">
+            <button id="btn-gen-show" class="btn-sm" type="button">Show</button>
+            <button id="btn-gen-regen" class="btn-sm" type="button" title="Regenerate">&#8635;</button>
+          </div>
+          <div class="gen-footer">
+            <button id="btn-gen-use" class="btn-sm btn-gen-use" type="button">Use this password</button>
+          </div>
         </div>
 
         <!-- Sensor status area (shown during / after enrollment) -->

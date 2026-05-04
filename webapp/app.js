@@ -85,6 +85,148 @@ async function send(cmd) {
   await state.writer.write(new TextEncoder().encode(cmd + '\n'));
 }
 
+// ── Password Generator ────────────────────────────────────────────────────────
+const _WORDS = [
+  'able','also','arch','area','army','atom','away','baby','back','ball',
+  'band','bank','base','bath','bear','bell','best','bird','blue','boat',
+  'body','bold','bone','book','bowl','calm','camp','card','care','cash',
+  'cave','cell','chip','city','club','coal','coat','code','coin','cold',
+  'cook','cool','core','corn','cost','cube','cure','dark','data','date',
+  'dawn','deal','deck','deep','desk','diet','disk','dock','door','draw',
+  'drop','drum','duck','dusk','dust','each','earn','east','edge','exam',
+  'exit','face','fact','fail','fair','fall','farm','fast','feat','feel',
+  'feet','file','fill','film','find','fire','firm','fish','flag','flat',
+  'flip','flow','foam','fold','font','food','foot','fork','form','fort',
+  'free','fuel','full','fund','fuse','gain','game','gate','gear','gift',
+  'give','glad','glow','glue','goal','gold','good','grab','gray','grid',
+  'grip','grow','gulf','gust','half','hall','hand','hard','harp','haze',
+  'head','heal','heap','heat','heel','help','hero','high','hike','hill',
+  'hint','hold','hole','home','hook','hope','horn','hour','hull','hunt',
+  'hurt','idea','idle','inch','iron','item','join','jump','just','keen',
+  'keep','kind','king','knee','knot','lake','lamp','land','lane','last',
+  'late','lava','lawn','lead','leaf','lean','leap','left','lend','lift',
+  'lime','link','lion','list','live','load','lock','loft','lone','long',
+  'loop','lose','loud','love','luck','lung','mail','main','make','many',
+  'mark','mask','mass','mast','mate','math','meal','mean','meat','meet',
+  'melt','mesh','mild','milk','mill','mind','mint','miss','mist','mode',
+  'mold','moon','move','much','must','nail','name','navy','need','nest',
+  'next','nice','node','noon','norm','note','oath','open','oval','pace',
+  'pack','page','pain','pale','palm','park','part','past','path','peak',
+  'pick','pier','pile','pine','pink','pipe','plan','play','plot','plow',
+  'plug','pole','pond','pool','port','pose','post','pour','prey','pull',
+  'pump','pure','push','race','rack','raid','rail','rain','ramp','rank',
+  'rate','read','real','reef','rely','rent','rest','rice','rich','ride',
+  'ring','rise','risk','road','rock','role','roll','roof','root','rope',
+  'rose','rude','rule','rush','rust','safe','sail','sale','salt','sand',
+  'save','scan','seal','seat','seed','seek','sell','ship','shop','shot',
+  'show','shut','silk','sing','site','size','skin','skip','slow','snap',
+  'snow','soft','soil','sold','sole','song','sort','soul','span','spin',
+  'spot','star','stay','stem','step','stir','stop','such','suit','sure',
+  'swap','swim','tail','take','tale','talk','tall','tank','tape','task',
+  'team','tear','tell','tend','tent','term','text','tide','tile','time',
+  'tiny','toll','tone','tool','toss','tour','town','tree','trim','trip',
+  'true','tube','tune','turf','turn','twin','type','unit','used','user',
+  'vale','vary','vast','verb','view','vine','void','wade','wage','wake',
+  'walk','wall','warm','warn','wave','weld','well','wide','wild','will',
+  'wind','wine','wing','wipe','wire','wise','wish','wolf','wood','word',
+  'work','worm','wrap','yard','year','zero','zone',
+];
+
+const _SAFE_POOL = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*-_=+?';
+const _SAFE_SETS = [
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+  'abcdefghijklmnopqrstuvwxyz',
+  '0123456789',
+  '!@#$%^&*-_=+?',
+];
+
+function _randInt(max) {
+  const a = new Uint32Array(1);
+  crypto.getRandomValues(a);
+  return a[0] % max;
+}
+
+function _genRandom(len) {
+  const chars = _SAFE_SETS.map(s => s[_randInt(s.length)]);
+  while (chars.length < len) chars.push(_SAFE_POOL[_randInt(_SAFE_POOL.length)]);
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = _randInt(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join('');
+}
+
+function _genPassphrase(wordCount) {
+  return Array.from({ length: wordCount }, () => _WORDS[_randInt(_WORDS.length)]).join('-');
+}
+
+let _genMode = 'random';
+
+function _doGenerate() {
+  const len = +document.getElementById('gen-length').value;
+  document.getElementById('gen-output').value =
+    _genMode === 'random' ? _genRandom(len) : _genPassphrase(len);
+}
+
+function _resetGenPanel() {
+  _genMode = 'random';
+  document.querySelectorAll('.gen-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === 'random'));
+  const slider = document.getElementById('gen-length');
+  slider.min = 8; slider.max = 32; slider.value = 16;
+  document.getElementById('gen-length-val').textContent  = '16';
+  document.getElementById('gen-length-unit').textContent = 'characters';
+  const out = document.getElementById('gen-output');
+  out.value = ''; out.type = 'password';
+  document.getElementById('btn-gen-show').textContent = 'Show';
+  document.getElementById('gen-panel').style.display = 'none';
+}
+
+document.getElementById('btn-generate').addEventListener('click', () => {
+  const panel   = document.getElementById('gen-panel');
+  const showing = panel.style.display !== 'none';
+  panel.style.display = showing ? 'none' : '';
+  if (!showing) _doGenerate();
+});
+
+document.querySelectorAll('.gen-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.gen-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    _genMode = tab.dataset.mode;
+    const slider = document.getElementById('gen-length');
+    if (_genMode === 'random') { slider.min = 8; slider.max = 32; slider.value = 16; }
+    else                        { slider.min = 3; slider.max = 6;  slider.value = 4;  }
+    document.getElementById('gen-length-val').textContent  = slider.value;
+    document.getElementById('gen-length-unit').textContent = _genMode === 'random' ? 'characters' : 'words';
+    _doGenerate();
+  });
+});
+
+document.getElementById('gen-length').addEventListener('input', () => {
+  document.getElementById('gen-length-val').textContent = document.getElementById('gen-length').value;
+  _doGenerate();
+});
+
+document.getElementById('btn-gen-show').addEventListener('click', () => {
+  const out    = document.getElementById('gen-output');
+  const btn    = document.getElementById('btn-gen-show');
+  const hidden = out.type === 'password';
+  out.type     = hidden ? 'text' : 'password';
+  btn.textContent = hidden ? 'Hide' : 'Show';
+});
+
+document.getElementById('btn-gen-regen').addEventListener('click', _doGenerate);
+
+document.getElementById('btn-gen-use').addEventListener('click', () => {
+  const pw = document.getElementById('gen-output').value;
+  if (!pw) return;
+  const pwInput = document.getElementById('finger-password');
+  pwInput.value = pw;
+  pwInput.type  = 'text';
+  document.querySelector('[data-target="finger-password"]').textContent = 'Hide';
+  document.getElementById('gen-panel').style.display = 'none';
+});
+
 // ── Wizard navigation ─────────────────────────────────────────────────────────
 function goToStep(n) {
   document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
@@ -196,7 +338,8 @@ function _renderFingerStep(slot) {
   document.getElementById('finger-label').value    = state.fingers[slot - 1].label    || '';
   document.getElementById('finger-password').value = state.fingers[slot - 1].password || '';
 
-  // Reset sensor
+  // Reset generator and sensor
+  _resetGenPanel();
   _setSensor('idle', 'Press "Enroll Finger" to scan your fingerprint.');
   document.getElementById('sensor-area').style.display     = 'none';
   document.getElementById('btn-enroll').style.display      = '';
