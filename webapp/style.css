@@ -571,6 +571,129 @@ input[type="range"] {
 
 .btn-gen-use:hover { background: var(--blue-d); border-color: var(--blue-d); }
 
+/* ── Sequence builder ────────────────────────────────────────────────────── */
+.seq-none {
+  color: var(--gray-3);
+  font-size: .9rem;
+  padding: .5rem 0 .75rem;
+}
+
+.seq-list {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  margin-bottom: .75rem;
+}
+
+.seq-item {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  background: var(--gray-1);
+  border-radius: 8px;
+  padding: .55rem .85rem;
+}
+
+.seq-item-steps {
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.seq-dot {
+  background: var(--blue);
+  color: #fff;
+  border-radius: 6px;
+  padding: .12rem .42rem;
+  font-size: .78rem;
+  font-weight: 700;
+}
+
+.seq-arrow { color: var(--gray-3); font-size: .85rem; }
+
+.seq-item-label {
+  font-size: .82rem;
+  color: var(--gray-4);
+  min-width: 0;
+}
+
+.btn-seq-remove {
+  background: none;
+  border: 1.5px solid var(--gray-2);
+  border-radius: 6px;
+  color: var(--red);
+  font-size: .78rem;
+  padding: .2rem .55rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .15s;
+  flex-shrink: 0;
+}
+
+.btn-seq-remove:hover { background: var(--red-l); }
+
+.seq-builder {
+  background: var(--gray-1);
+  border: 1.5px solid var(--gray-2);
+  border-radius: 10px;
+  padding: 1.1rem;
+  margin-top: .85rem;
+}
+
+.seq-builder h3 { margin-bottom: .4rem; }
+
+.seq-scan-display {
+  background: var(--gray-1);
+  border-radius: 8px;
+  padding: .65rem .85rem;
+  margin: .75rem 0 .85rem;
+  min-height: 2.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.seq-scan-empty {
+  color: var(--gray-3);
+  font-size: .88rem;
+  margin: 0;
+}
+
+.seq-scan-steps {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .25rem;
+}
+
+/* ── Trigger count row ───────────────────────────────────────────────────── */
+.trigger-count-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin-top: .4rem;
+}
+
+.trigger-count-btn {
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 1.5px solid var(--gray-2);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-size: .9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.trigger-count-btn:hover { background: var(--blue-l); border-color: var(--blue); }
+.trigger-count-btn.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+
 /* ── Responsive tweaks ───────────────────────────────────────────────────── */
 @media (max-width: 500px) {
   .card { padding: 1.5rem 1.25rem; }

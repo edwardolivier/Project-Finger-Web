@@ -7,18 +7,12 @@
 
 // ── State ────────────────────────────────────────────────────────────────────
 const state = {
-  port:         null,
-  writer:       null,
-  readBuffer:   '',
-  encKey:       '',
-  currentSlot:  1,         // 1-5
-  fingers: Array.from({ length: 5 }, (_, i) => ({
-    slot:     i + 1,
-    label:    '',
-    password: '',
-    enrolled: false,
-    skipped:  false,
-  })),
+  port:       null,
+  writer:     null,
+  readBuffer: '',
+  encKey:     '',
+  passwords:  [],   // [{label, password, steps:[slotId, ...]}]
+  nextSlot:   1,    // next slot id for new enrollments
 };
 
 // ── Message bus ──────────────────────────────────────────────────────────────
@@ -29,10 +23,6 @@ function onLine(fn)  { _listeners.add(fn); return () => _listeners.delete(fn); }
 
 function _emitLine(line) { _listeners.forEach(fn => fn(line)); }
 
-/**
- * Returns a Promise that resolves with the first line whose text starts with
- * `prefix`.  Rejects after `timeoutMs` ms.
- */
 function waitFor(prefix, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => { off(); reject(new Error(`Timeout waiting for "${prefix}"`)); }, timeoutMs);
@@ -41,6 +31,17 @@ function waitFor(prefix, timeoutMs = 10000) {
     });
   });
 }
+
+function waitForAny(prefixes, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { off(); reject(new Error('Timeout waiting for device response')); }, timeoutMs);
+    const off = onLine(line => {
+      if (prefixes.some(p => line.startsWith(p))) { clearTimeout(timer); off(); resolve(line); }
+    });
+  });
+}
+
+const delay = ms => new Promise(r => setTimeout(r, ms));
 
 // ── Serial connection ─────────────────────────────────────────────────────────
 async function connectSerial() {
@@ -181,7 +182,7 @@ function _resetGenPanel() {
   document.getElementById('gen-panel').style.display = 'none';
 }
 
-document.getElementById('btn-generate').addEventListener('click', () => {
+document.getElementById('btn-pw-generate').addEventListener('click', () => {
   const panel   = document.getElementById('gen-panel');
   const showing = panel.style.display !== 'none';
   panel.style.display = showing ? 'none' : '';
@@ -220,10 +221,10 @@ document.getElementById('btn-gen-regen').addEventListener('click', _doGenerate);
 document.getElementById('btn-gen-use').addEventListener('click', () => {
   const pw = document.getElementById('gen-output').value;
   if (!pw) return;
-  const pwInput = document.getElementById('finger-password');
+  const pwInput = document.getElementById('pw-password');
   pwInput.value = pw;
   pwInput.type  = 'text';
-  document.querySelector('[data-target="finger-password"]').textContent = 'Hide';
+  document.querySelector('[data-target="pw-password"]').textContent = 'Hide';
   document.getElementById('gen-panel').style.display = 'none';
 });
 
@@ -232,11 +233,9 @@ function goToStep(n) {
   document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
   document.getElementById(`step-${n}`).classList.add('active');
 
-  // Progress bar
   const bar = document.getElementById('progress-bar');
   bar.style.display = n >= 1 && n <= 4 ? '' : 'none';
 
-  // Steps 1-3 map to pb-1..3; step 5 = done = pb-4
   const pbMap = { 1: 1, 2: 2, 3: 3, 4: 3, 5: 4 };
   const active = pbMap[n] || 0;
   [1, 2, 3, 4].forEach(i => {
@@ -327,7 +326,8 @@ document.getElementById('btn-key-next').addEventListener('click', async () => {
     await waitFor('OK:MAX_FAILS_SET', 6000);
 
     goToStep(2);
-    _renderFingerStep(1);
+    _renderPwList();
+    _initTriggerCountRow();
   } catch (e) {
     showAlert('key-error', `Device error: ${e.message}`);
   } finally {
@@ -336,190 +336,329 @@ document.getElementById('btn-key-next').addEventListener('click', async () => {
   }
 });
 
-// ── Step 2: Finger setup ──────────────────────────────────────────────────────
-function _renderFingerStep(slot) {
-  state.currentSlot = slot;
-  document.getElementById('finger-heading').textContent = `Set Up Finger ${slot}`;
-  document.getElementById('finger-label').value    = state.fingers[slot - 1].label    || '';
-  document.getElementById('finger-password').value = state.fingers[slot - 1].password || '';
+// ── Step 2: Password setup ────────────────────────────────────────────────────
+let _pwTriggerCount = 0;
+let _pwTriggerSteps = [];
+let _pwScanGen      = 0;   // increment to cancel stale scan handlers
 
-  // Reset generator and sensor
-  _resetGenPanel();
-  _setSensor('idle', 'Press "Enroll Finger" to scan your fingerprint.');
-  document.getElementById('sensor-area').style.display     = 'none';
-  document.getElementById('btn-enroll').style.display      = '';
-  document.getElementById('btn-enroll').disabled           = false;
-  document.getElementById('btn-enroll').textContent        = 'Enroll Finger';
-  document.getElementById('btn-next-finger').style.display = 'none';
-  hideAlert('enroll-error');
-
-  // Dot indicators
-  for (let i = 1; i <= 5; i++) {
-    const dot = document.getElementById(`fd-${i}`);
-    dot.classList.remove('current', 'done', 'skipped');
-    const f = state.fingers[i - 1];
-    if (f.enrolled)     dot.classList.add('done');
-    else if (f.skipped) dot.classList.add('skipped');
-    else if (i === slot) dot.classList.add('current');
+function _initTriggerCountRow() {
+  const row = document.getElementById('trigger-count-row');
+  row.innerHTML = '';
+  for (let i = 1; i <= 10; i++) {
+    const btn = document.createElement('button');
+    btn.className   = 'trigger-count-btn';
+    btn.dataset.count = i;
+    btn.textContent = i;
+    btn.type        = 'button';
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.trigger-count-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      _pwTriggerCount = i;
+      _pwTriggerSteps = [];
+      _pwScanGen++;
+      hideAlert('trigger-scan-error');
+      hideAlert('pw-builder-error');
+      document.getElementById('btn-pw-save').style.display        = 'none';
+      document.getElementById('trigger-sensor-area').style.display = 'none';
+      document.getElementById('trigger-scan-section').style.display = '';
+      _updateTriggerDisplay();
+      _startNextTriggerScan(_pwScanGen);
+    });
+    row.appendChild(btn);
   }
 }
 
-function _setSensor(state, msg) {
-  const el   = document.getElementById('sensor');
-  const icon = document.getElementById('sensor-icon');
-  const msgEl= document.getElementById('sensor-msg');
+function _updateTriggerDisplay() {
+  const stepsEl = document.getElementById('trigger-scan-steps');
+  const emptyEl = document.getElementById('trigger-scan-empty');
+  if (_pwTriggerSteps.length === 0) {
+    stepsEl.innerHTML     = '';
+    emptyEl.style.display = '';
+  } else {
+    emptyEl.style.display = 'none';
+    stepsEl.innerHTML = _pwTriggerSteps
+      .map(s => `<span class="seq-dot">F${s}</span>`)
+      .join('<span class="seq-arrow"> → </span>');
+  }
+  const remaining = _pwTriggerCount - _pwTriggerSteps.length;
+  document.getElementById('trigger-scan-prompt').textContent =
+    remaining > 0
+      ? `Scan finger ${_pwTriggerSteps.length + 1} of ${_pwTriggerCount} on the device.`
+      : `All ${_pwTriggerCount} finger${_pwTriggerCount > 1 ? 's' : ''} set — ready to save.`;
+}
 
+function _setTriggerSensor(s, msg) {
+  const el    = document.getElementById('trigger-sensor');
+  const icon  = document.getElementById('trigger-sensor-icon');
+  const msgEl = document.getElementById('trigger-sensor-msg');
   el.className = 'sensor';
-
   const map = {
-    idle:    { cls: '',        sym: '&#9632;' },   // square = ready
     waiting: { cls: 'waiting', sym: '&#9632;' },
-    placing: { cls: 'placing', sym: '&#8679;' },   // up arrow
+    placing: { cls: 'placing', sym: '&#8679;' },
     lifting: { cls: 'lifting', sym: '&#8679;' },
     again:   { cls: 'placing', sym: '&#8679;' },
-    success: { cls: 'success', sym: '&#10003;' },  // checkmark
-    fail:    { cls: 'fail',    sym: '&#10007;' },  // X
+    success: { cls: 'success', sym: '&#10003;' },
+    fail:    { cls: 'fail',    sym: '&#10007;' },
   };
-
-  const cfg = map[state] || map.idle;
+  const cfg = map[s] || { cls: '', sym: '&#9632;' };
   if (cfg.cls) el.classList.add(cfg.cls);
-  icon.innerHTML = cfg.sym;
+  icon.innerHTML    = cfg.sym;
   msgEl.textContent = msg;
 }
 
-async function _runEnrollment(slot) {
-  document.getElementById('sensor-area').style.display = '';
-  document.getElementById('btn-enroll').disabled = true;
+async function _startNextTriggerScan(gen) {
+  if (gen !== _pwScanGen) return;
+  if (_pwTriggerSteps.length >= _pwTriggerCount) return;
 
-  _setSensor('waiting', 'Starting...');
+  hideAlert('trigger-scan-error');
+  document.getElementById('trigger-sensor-area').style.display = '';
+  _setTriggerSensor('waiting', `Place finger ${_pwTriggerSteps.length + 1} on the sensor.`);
 
-  return new Promise((resolve) => {
-    const off = onLine(line => {
-      if (line === `PLACE_FINGER:${slot}`) {
-        _setSensor('placing', 'Place your finger on the sensor.');
-      } else if (line === `LIFT_FINGER:${slot}`) {
-        _setSensor('lifting', 'Lift your finger off the sensor.');
-      } else if (line === `PLACE_AGAIN:${slot}`) {
-        _setSensor('again', 'Place the same finger on the sensor again.');
-      } else if (line === `OK:${slot}`) {
-        off();
-        _setSensor('success', 'Finger enrolled successfully!');
-        resolve(true);
-      } else if (line.startsWith('FAIL:')) {
-        off();
-        const reason = line.split(':')[1] || 'unknown';
-        const msgs = {
-          timeout:   'Timed out — no finger detected.',
-          image1:    'Could not read the fingerprint. Try again.',
-          image2:    'Second scan failed. Try again.',
-          no_match:  'The two scans did not match. Keep your finger still.',
-          store:     'Could not save the fingerprint. Try again.',
-        };
-        _setSensor('fail', msgs[reason] || `Failed (${reason}). Try again.`);
-        resolve(false);
-      }
-    });
-  });
+  let result;
+  try {
+    await send('SCAN_FINGER');
+    result = await waitForAny(['SCANNED:', 'SCAN_UNENROLLED', 'FAIL:'], 20000);
+  } catch (e) {
+    if (gen !== _pwScanGen) return;
+    showAlert('trigger-scan-error', `Scan error: ${e.message}`);
+    _setTriggerSensor('fail', 'Error — check connection.');
+    return;
+  }
+  if (gen !== _pwScanGen) return;
+
+  if (result.startsWith('SCANNED:')) {
+    const slot = +result.split(':')[1];
+    _pwTriggerSteps.push(slot);
+    _setTriggerSensor('success', `Finger ${_pwTriggerSteps.length} recognised (slot ${slot}).`);
+    _updateTriggerDisplay();
+    await delay(800);
+    if (gen !== _pwScanGen) return;
+    if (_pwTriggerSteps.length < _pwTriggerCount) {
+      _startNextTriggerScan(gen);
+    } else {
+      _onTriggerComplete();
+    }
+
+  } else if (result === 'SCAN_UNENROLLED') {
+    _setTriggerSensor('fail', 'New finger — lift finger and scan again to enroll it.');
+    await delay(900);
+    if (gen !== _pwScanGen) return;
+    await _enrollForTrigger(gen);
+
+  } else {
+    const reason = result.split(':')[1] || '';
+    _setTriggerSensor('fail', reason === 'timeout' ? 'No finger detected — try again.' : 'Scan failed — try again.');
+    await delay(1500);
+    _startNextTriggerScan(gen);
+  }
 }
 
-document.getElementById('btn-enroll').addEventListener('click', async () => {
-  hideAlert('enroll-error');
-  const slot     = state.currentSlot;
-  const label    = document.getElementById('finger-label').value.trim();
-  const password = document.getElementById('finger-password').value;
+async function _enrollForTrigger(gen) {
+  if (gen !== _pwScanGen) return;
+  const slot = state.nextSlot;
+  _setTriggerSensor('placing', 'Place same finger on the sensor (scan 1 of 2).');
 
-  if (!password) {
-    return showAlert('enroll-error', 'Please enter the password this finger should type.');
+  let ok = false;
+  try {
+    await send(`ENROLL:${slot}`);
+    ok = await new Promise(resolve => {
+      const off = onLine(line => {
+        if (line === `PLACE_FINGER:${slot}`) {
+          _setTriggerSensor('placing', 'Place your finger on the sensor.');
+        } else if (line === `LIFT_FINGER:${slot}`) {
+          _setTriggerSensor('lifting', 'Lift your finger off the sensor.');
+        } else if (line === `PLACE_AGAIN:${slot}`) {
+          _setTriggerSensor('again', 'Place the same finger on the sensor again.');
+        } else if (line === `OK:${slot}`) {
+          off(); resolve(true);
+        } else if (line.startsWith('FAIL:')) {
+          off(); resolve(false);
+        }
+      });
+    });
+  } catch (e) {
+    if (gen !== _pwScanGen) return;
+    showAlert('trigger-scan-error', `Enrollment error: ${e.message}`);
+    _setTriggerSensor('fail', 'Error — check connection.');
+    return;
+  }
+  if (gen !== _pwScanGen) return;
+
+  if (ok) {
+    state.nextSlot++;
+    _pwTriggerSteps.push(slot);
+    _setTriggerSensor('success', `Finger ${_pwTriggerSteps.length} enrolled!`);
+    _updateTriggerDisplay();
+    await delay(800);
+    if (gen !== _pwScanGen) return;
+    if (_pwTriggerSteps.length < _pwTriggerCount) {
+      _startNextTriggerScan(gen);
+    } else {
+      _onTriggerComplete();
+    }
+  } else {
+    _setTriggerSensor('fail', 'Enrollment failed — tap the finger count to retry.');
+  }
+}
+
+function _onTriggerComplete() {
+  document.getElementById('trigger-sensor-area').style.display = 'none';
+  document.getElementById('btn-pw-save').style.display         = '';
+}
+
+function _closePwBuilder() {
+  _pwScanGen++;
+  _pwTriggerCount = 0;
+  _pwTriggerSteps = [];
+  document.getElementById('pw-builder').style.display          = 'none';
+  document.getElementById('btn-add-pw').style.display          = '';
+  document.getElementById('trigger-scan-section').style.display = 'none';
+  document.getElementById('trigger-sensor-area').style.display  = 'none';
+  document.getElementById('btn-pw-save').style.display          = 'none';
+  document.getElementById('gen-panel').style.display            = 'none';
+  document.querySelectorAll('.trigger-count-btn').forEach(b => b.classList.remove('active'));
+  hideAlert('pw-builder-error');
+  hideAlert('trigger-scan-error');
+}
+
+function _renderPwList() {
+  const list   = document.getElementById('pw-list');
+  const noneEl = document.getElementById('pw-list-empty');
+  if (state.passwords.length === 0) {
+    list.innerHTML       = '';
+    noneEl.style.display = '';
+  } else {
+    noneEl.style.display = 'none';
+    list.innerHTML = state.passwords.map((pw, i) => `
+      <div class="seq-item">
+        <div class="seq-item-steps">
+          ${pw.steps.map(s => `<span class="seq-dot">F${s}</span>`).join('<span class="seq-arrow"> → </span>')}
+        </div>
+        <span class="seq-item-label">${pw.label || '<em>no label</em>'}</span>
+        <button class="btn-seq-remove" data-idx="${i}" type="button">Remove</button>
+      </div>
+    `).join('');
+    list.querySelectorAll('.btn-seq-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.passwords.splice(+btn.dataset.idx, 1);
+        _renderPwList();
+      });
+    });
+  }
+}
+
+document.getElementById('btn-add-pw').addEventListener('click', () => {
+  _pwScanGen++;
+  _pwTriggerCount = 0;
+  _pwTriggerSteps = [];
+  document.getElementById('pw-label').value    = '';
+  document.getElementById('pw-password').value = '';
+  document.querySelectorAll('.trigger-count-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('trigger-scan-section').style.display = 'none';
+  document.getElementById('trigger-sensor-area').style.display  = 'none';
+  document.getElementById('btn-pw-save').style.display          = 'none';
+  document.getElementById('gen-panel').style.display            = 'none';
+  hideAlert('pw-builder-error');
+  hideAlert('trigger-scan-error');
+  document.getElementById('pw-builder').style.display = '';
+  document.getElementById('btn-add-pw').style.display = 'none';
+});
+
+document.getElementById('btn-pw-cancel').addEventListener('click', () => {
+  _closePwBuilder();
+});
+
+document.getElementById('btn-pw-save').addEventListener('click', () => {
+  hideAlert('pw-builder-error');
+
+  const password = document.getElementById('pw-password').value;
+  if (!password)                return showAlert('pw-builder-error', 'Please enter a password.');
+  if (_pwTriggerSteps.length === 0) return showAlert('pw-builder-error', 'Please set the trigger fingers first.');
+
+  const startSlot = _pwTriggerSteps[0];
+  const conflict  = state.passwords.find(p => p.steps[0] === startSlot);
+  if (conflict) {
+    return showAlert('pw-builder-error',
+      `Finger ${startSlot} already starts "${conflict.label || 'another password'}". ` +
+      `Please use a different starting finger.`);
   }
 
-  // Save to local state
-  state.fingers[slot - 1].label    = label;
-  state.fingers[slot - 1].password = password;
+  state.passwords.push({
+    label:    document.getElementById('pw-label').value.trim(),
+    password,
+    steps:    [..._pwTriggerSteps],
+  });
+
+  _closePwBuilder();
+  _renderPwList();
+});
+
+document.getElementById('btn-step2-continue').addEventListener('click', async () => {
+  hideAlert('step2-error');
+  if (state.passwords.length === 0) {
+    return showAlert('step2-error', 'Please add at least one password before continuing.');
+  }
+
+  const btn = document.getElementById('btn-step2-continue');
+  btn.disabled    = true;
+  btn.textContent = 'Saving...';
 
   try {
-    // Store password on device first (so retry also re-saves cleanly)
-    await send(`SET_PASSWORD:${slot}:${password}`);
-    await waitFor(`OK:PASSWORD:${slot}`, 6000);
-
-    // Run fingerprint enrollment
-    await send(`ENROLL:${slot}`);
-    const ok = await _runEnrollment(slot);
-
-    if (ok) {
-      state.fingers[slot - 1].enrolled = true;
-      document.getElementById('btn-enroll').style.display      = 'none';
-      document.getElementById('btn-next-finger').style.display = '';
-      document.getElementById(`fd-${slot}`).classList.replace('current', 'done');
-    } else {
-      // Re-enable enroll button for retry
-      document.getElementById('btn-enroll').disabled    = false;
-      document.getElementById('btn-enroll').textContent = 'Try Again';
+    for (const pw of state.passwords) {
+      if (pw.steps.length === 1) {
+        const slot = pw.steps[0];
+        await send(`SET_PASSWORD:${slot}:${pw.password}`);
+        await waitFor(`OK:PASSWORD:${slot}`, 6000);
+      } else {
+        const key = pw.steps.join(',');
+        await send(`SET_SEQ_PASSWORD:${key}:${pw.password}`);
+        await waitFor(`OK:SEQ_PASSWORD:${key}`, 6000);
+      }
     }
-  } catch (e) {
-    showAlert('enroll-error', `Error: ${e.message}`);
-    document.getElementById('btn-enroll').disabled = false;
-  }
-});
-
-document.getElementById('btn-next-finger').addEventListener('click', () => {
-  _advanceFinger();
-});
-
-document.getElementById('btn-skip-finger').addEventListener('click', () => {
-  state.fingers[state.currentSlot - 1].skipped = true;
-  document.getElementById(`fd-${state.currentSlot}`).classList.replace('current', 'skipped');
-  _advanceFinger();
-});
-
-document.getElementById('btn-skip-all').addEventListener('click', () => {
-  goToStep(3);
-  _renderReview();
-});
-
-function _advanceFinger() {
-  if (state.currentSlot < 5) {
-    _renderFingerStep(state.currentSlot + 1);
-  } else {
     goToStep(3);
     _renderReview();
+  } catch (e) {
+    showAlert('step2-error', `Error saving passwords: ${e.message}`);
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Continue to Review';
   }
-}
+});
+
+document.getElementById('btn-step2-back').addEventListener('click', () => {
+  goToStep(1);
+});
 
 // ── Step 3: Review ────────────────────────────────────────────────────────────
 function _renderReview() {
-  const enrolled = state.fingers.filter(f => f.enrolled);
-  const tbody    = document.getElementById('review-body');
-  const none     = document.getElementById('review-none');
+  const tbody = document.getElementById('review-body');
+  const none  = document.getElementById('review-none');
 
-  if (enrolled.length === 0) {
+  if (state.passwords.length === 0) {
     tbody.innerHTML = '';
     none.style.display = '';
     document.getElementById('btn-lockdown').disabled = true;
   } else {
     none.style.display = 'none';
     document.getElementById('btn-lockdown').disabled = false;
-    tbody.innerHTML = enrolled.map(f => `
+    tbody.innerHTML = state.passwords.map(pw => `
       <tr>
-        <td>Finger ${f.slot}</td>
-        <td>${f.label || '<em style="color:#94a3b8">no label</em>'}</td>
-        <td style="font-family:monospace">${'•'.repeat(Math.min(f.password.length, 10))}</td>
+        <td>${pw.steps.map(s => `F${s}`).join(' → ')}</td>
+        <td>${pw.label || '<em style="color:#94a3b8">no label</em>'}</td>
+        <td style="font-family:monospace">${'•'.repeat(Math.min(pw.password.length, 10))}</td>
       </tr>
     `).join('');
   }
 }
 
 document.getElementById('btn-back-to-fingers').addEventListener('click', () => {
-  const lastSlot = state.fingers.findLast(f => !f.enrolled && !f.skipped)?.slot
-                || state.fingers.findLast(f => f.enrolled)?.slot
-                || 1;
   goToStep(2);
-  _renderFingerStep(lastSlot);
+  _renderPwList();
 });
 
 document.getElementById('btn-lockdown').addEventListener('click', async () => {
   hideAlert('lockdown-error');
-  const enrolled = state.fingers.filter(f => f.enrolled);
-  if (enrolled.length === 0) return;
+  if (state.passwords.length === 0) return;
 
   const btn = document.getElementById('btn-lockdown');
   btn.disabled    = true;

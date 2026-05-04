@@ -24,7 +24,7 @@
     <div class="pb-line"></div>
     <div class="pb-step" id="pb-2">
       <div class="pb-circle">2</div>
-      <span>Fingers</span>
+      <span>Passwords</span>
     </div>
     <div class="pb-line"></div>
     <div class="pb-step" id="pb-3">
@@ -120,77 +120,96 @@
       </div>
     </section>
 
-    <!-- ─────────────────── STEP 2: Finger Setup ─────────────────── -->
+    <!-- ─────────────────── STEP 2: Passwords ─────────────────── -->
     <section id="step-2" class="step">
       <div class="card">
-        <h2 id="finger-heading">Set Up Finger 1</h2>
-        <p id="finger-sub">Assign a label and the password this finger will type.</p>
+        <h2>Set Up Passwords</h2>
+        <p>For each password, pick how many fingers trigger it (1 = single press, 2–10 = scan in order), then scan them on the device.</p>
 
-        <!-- Finger slot progress dots -->
-        <div class="finger-dots">
-          <div class="fd" id="fd-1" title="Finger 1">1</div>
-          <div class="fd" id="fd-2" title="Finger 2">2</div>
-          <div class="fd" id="fd-3" title="Finger 3">3</div>
-          <div class="fd" id="fd-4" title="Finger 4">4</div>
-          <div class="fd" id="fd-5" title="Finger 5">5</div>
-        </div>
+        <div id="pw-list" class="seq-list"></div>
+        <p id="pw-list-empty" class="seq-none">No passwords added yet.</p>
 
-        <div class="form-group">
-          <label for="finger-label">Label <span class="optional">(optional)</span></label>
-          <input id="finger-label" type="text" placeholder="e.g. Work computer, Home Wi-Fi">
-        </div>
+        <button id="btn-add-pw" class="btn-secondary" type="button">+ Add Password</button>
 
-        <div class="form-group">
-          <label for="finger-password">Password to type</label>
-          <div class="pw-wrap">
-            <input id="finger-password" type="password" placeholder="The exact text to type when this finger is scanned">
-            <button class="toggle-pw" data-target="finger-password" type="button">Show</button>
+        <!-- Password builder -->
+        <div id="pw-builder" class="seq-builder" style="display:none">
+          <h3>New Password</h3>
+
+          <div class="form-group">
+            <label for="pw-label">Label <span class="optional">(optional)</span></label>
+            <input id="pw-label" type="text" placeholder="e.g. Work login, Home Wi-Fi">
           </div>
-          <button id="btn-generate" class="btn-link gen-trigger" type="button">Generate password</button>
-        </div>
 
-        <!-- Password Generator Panel -->
-        <div id="gen-panel" class="gen-panel" style="display:none">
-          <div class="gen-tabs">
-            <button class="gen-tab active" data-mode="random" type="button">Random</button>
-            <button class="gen-tab" data-mode="passphrase" type="button">Passphrase</button>
-          </div>
-          <div class="gen-length-row">
-            <div class="gen-length-header">
-              <span>Length</span>
-              <span><strong id="gen-length-val">16</strong> <span id="gen-length-unit">characters</span></span>
+          <div class="form-group">
+            <label for="pw-password">Password to type</label>
+            <div class="pw-wrap">
+              <input id="pw-password" type="password" placeholder="The exact text to type when triggered">
+              <button class="toggle-pw" data-target="pw-password" type="button">Show</button>
             </div>
-            <input type="range" id="gen-length" min="8" max="32" value="16">
+            <button id="btn-pw-generate" class="btn-link gen-trigger" type="button">Generate password</button>
           </div>
-          <div class="gen-output-row">
-            <input type="password" id="gen-output" class="gen-output" readonly placeholder="—">
-            <button id="btn-gen-show" class="btn-sm" type="button">Show</button>
-            <button id="btn-gen-regen" class="btn-sm" type="button" title="Regenerate">&#8635;</button>
+
+          <!-- Generator panel -->
+          <div id="gen-panel" class="gen-panel" style="display:none">
+            <div class="gen-tabs">
+              <button class="gen-tab active" data-mode="random" type="button">Random</button>
+              <button class="gen-tab" data-mode="passphrase" type="button">Passphrase</button>
+            </div>
+            <div class="gen-length-row">
+              <div class="gen-length-header">
+                <span>Length</span>
+                <span><strong id="gen-length-val">16</strong> <span id="gen-length-unit">characters</span></span>
+              </div>
+              <input type="range" id="gen-length" min="8" max="32" value="16">
+            </div>
+            <div class="gen-output-row">
+              <input type="password" id="gen-output" class="gen-output" readonly placeholder="—">
+              <button id="btn-gen-show" class="btn-sm" type="button">Show</button>
+              <button id="btn-gen-regen" class="btn-sm" type="button" title="Regenerate">&#8635;</button>
+            </div>
+            <div class="gen-footer">
+              <button id="btn-gen-use" class="btn-sm btn-gen-use" type="button">Use this password</button>
+            </div>
           </div>
-          <div class="gen-footer">
-            <button id="btn-gen-use" class="btn-sm btn-gen-use" type="button">Use this password</button>
+
+          <div class="form-group" style="margin-top:.9rem">
+            <label>Fingers to trigger this password</label>
+            <div class="trigger-count-row" id="trigger-count-row"><!-- filled by JS --></div>
+            <p class="field-hint">Select a number, then scan that many fingers in the exact order you want.</p>
+          </div>
+
+          <!-- Trigger scan area — appears after count is selected -->
+          <div id="trigger-scan-section" style="display:none">
+            <p id="trigger-scan-prompt" class="field-hint" style="margin-bottom:.5rem">—</p>
+
+            <div class="seq-scan-display">
+              <p id="trigger-scan-empty" class="seq-scan-empty">No fingers scanned yet.</p>
+              <div id="trigger-scan-steps" class="seq-scan-steps"></div>
+            </div>
+
+            <div class="sensor-area" id="trigger-sensor-area" style="display:none">
+              <div class="sensor" id="trigger-sensor">
+                <span id="trigger-sensor-icon" class="sensor-icon">&#9632;</span>
+              </div>
+              <p id="trigger-sensor-msg" class="sensor-msg">Ready</p>
+            </div>
+
+            <div id="trigger-scan-error" class="alert alert-error" style="display:none"></div>
+          </div>
+
+          <div id="pw-builder-error" class="alert alert-error" style="display:none"></div>
+
+          <div class="actions" style="margin-top:1rem">
+            <button id="btn-pw-save" class="btn-primary" style="display:none" type="button">Save Password</button>
+            <button id="btn-pw-cancel" class="btn-secondary" type="button">Cancel</button>
           </div>
         </div>
 
-        <!-- Sensor status area (shown during / after enrollment) -->
-        <div class="sensor-area" id="sensor-area" style="display:none">
-          <div class="sensor" id="sensor">
-            <span id="sensor-icon" class="sensor-icon">&#9632;</span>
-          </div>
-          <p id="sensor-msg" class="sensor-msg">Ready</p>
-        </div>
+        <div id="step2-error" class="alert alert-error" style="display:none"></div>
 
-        <div id="enroll-error" class="alert alert-error" style="display:none"></div>
-
-        <div class="actions">
-          <button id="btn-enroll" class="btn-primary">Enroll Finger</button>
-          <button id="btn-next-finger" class="btn-secondary" style="display:none">Next Finger</button>
-        </div>
-
-        <div class="skip-links">
-          <button id="btn-skip-finger" class="btn-link">Skip this finger</button>
-          &nbsp;&bull;&nbsp;
-          <button id="btn-skip-all" class="btn-link">Skip to review</button>
+        <div class="actions" style="margin-top:2rem">
+          <button id="btn-step2-continue" class="btn-primary" type="button">Continue to Review</button>
+          <button id="btn-step2-back" class="btn-secondary" type="button">Back</button>
         </div>
       </div>
     </section>
@@ -204,7 +223,7 @@
         <table class="review-table" id="review-table">
           <thead>
             <tr>
-              <th>Finger</th>
+              <th>Trigger</th>
               <th>Label</th>
               <th>Password</th>
             </tr>
@@ -213,7 +232,7 @@
         </table>
 
         <div id="review-none" class="alert alert-warn" style="display:none">
-          No fingers were enrolled. Go back and set up at least one finger before locking.
+          No passwords were set up. Go back and add at least one password before locking.
         </div>
 
         <div class="alert alert-warn" style="margin-top:1.5rem">

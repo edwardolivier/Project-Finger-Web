@@ -667,6 +667,33 @@ input[type="range"] {
   gap: .25rem;
 }
 
+/* ── Trigger count row ───────────────────────────────────────────────────── */
+.trigger-count-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin-top: .4rem;
+}
+
+.trigger-count-btn {
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 1.5px solid var(--gray-2);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  font-size: .9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.trigger-count-btn:hover { background: var(--blue-l); border-color: var(--blue); }
+.trigger-count-btn.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+
 /* ── Responsive tweaks ───────────────────────────────────────────────────── */
 @media (max-width: 500px) {
   .card { padding: 1.5rem 1.25rem; }
