@@ -213,42 +213,48 @@
         <!-- Sequence builder (hidden by default) -->
         <div id="seq-builder" class="seq-builder" style="display:none">
           <h3>New Sequence</h3>
+          <p class="field-hint">Scan your enrolled fingers one at a time in the order you want. Each recognised scan adds one step to the sequence.</p>
 
-          <div class="form-group">
-            <label>Fingers in sequence</label>
-            <div class="seq-len-row">
-              <button class="seq-len-btn active" data-len="2" type="button">2</button>
-              <button class="seq-len-btn" data-len="3" type="button">3</button>
-              <button class="seq-len-btn" data-len="4" type="button">4</button>
-              <button class="seq-len-btn" data-len="5" type="button">5</button>
+          <!-- Live sequence display -->
+          <div class="seq-scan-display">
+            <p id="seq-scan-empty" class="seq-scan-empty">No fingers scanned yet.</p>
+            <div id="seq-scan-steps" class="seq-scan-steps"></div>
+          </div>
+
+          <!-- Sensor feedback (shown while scanning) -->
+          <div class="sensor-area" id="seq-sensor-area" style="display:none">
+            <div class="sensor" id="seq-sensor">
+              <span id="seq-sensor-icon" class="sensor-icon">&#9632;</span>
             </div>
+            <p id="seq-sensor-msg" class="sensor-msg">Ready</p>
           </div>
 
-          <div class="form-group">
-            <label>Finger order</label>
-            <div id="seq-finger-pickers" class="seq-finger-pickers">
-              <!-- populated dynamically -->
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="seq-label">Label <span class="optional">(optional)</span></label>
-            <input id="seq-label" type="text" placeholder="e.g. Bank login">
-          </div>
-
-          <div class="form-group">
-            <label for="seq-password">Password to type</label>
-            <div class="pw-wrap">
-              <input id="seq-password" type="password" placeholder="Password for this sequence">
-              <button class="toggle-pw" data-target="seq-password" type="button">Show</button>
-            </div>
-          </div>
-
-          <div id="seq-builder-error" class="alert alert-error" style="display:none"></div>
+          <div id="seq-scan-error" class="alert alert-error" style="display:none"></div>
 
           <div class="actions">
-            <button id="btn-seq-add" class="btn-primary" type="button">Add Sequence</button>
+            <button id="btn-seq-start-scan" class="btn-primary" type="button">Start Scanning</button>
+            <button id="btn-seq-done-scan" class="btn-primary" style="display:none" type="button">Done Scanning</button>
+            <button id="btn-seq-undo" class="btn-secondary" style="display:none" type="button">Undo Last</button>
             <button id="btn-seq-cancel" class="btn-secondary" type="button">Cancel</button>
+          </div>
+
+          <!-- Password section — shown after Done Scanning -->
+          <div id="seq-pw-section" style="display:none; margin-top:1.25rem; border-top:1px solid var(--gray-2); padding-top:1.1rem">
+            <div class="form-group">
+              <label for="seq-label">Label <span class="optional">(optional)</span></label>
+              <input id="seq-label" type="text" placeholder="e.g. Bank login">
+            </div>
+            <div class="form-group">
+              <label for="seq-password">Password to type</label>
+              <div class="pw-wrap">
+                <input id="seq-password" type="password" placeholder="Password for this sequence">
+                <button class="toggle-pw" data-target="seq-password" type="button">Show</button>
+              </div>
+            </div>
+            <div id="seq-builder-error" class="alert alert-error" style="display:none"></div>
+            <div class="actions">
+              <button id="btn-seq-add" class="btn-primary" type="button">Save Sequence</button>
+            </div>
           </div>
         </div>
 

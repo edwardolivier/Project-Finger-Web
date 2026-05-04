@@ -642,53 +642,30 @@ input[type="range"] {
   margin-top: .85rem;
 }
 
-.seq-builder h3 { margin-bottom: .85rem; }
+.seq-builder h3 { margin-bottom: .4rem; }
 
-.seq-len-row {
-  display: flex;
-  gap: .5rem;
-}
-
-.seq-len-btn {
-  flex: 1;
-  padding: .42rem .5rem;
-  border: 1.5px solid var(--gray-2);
-  border-radius: 7px;
-  background: #fff;
-  color: var(--gray-4);
-  font-size: .9rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background .15s, color .15s, border-color .15s;
-}
-
-.seq-len-btn.active {
-  background: var(--blue);
-  border-color: var(--blue);
-  color: #fff;
-}
-
-.seq-finger-pickers {
-  display: flex;
-  flex-direction: column;
-  gap: .5rem;
-}
-
-.seq-step-row {
+.seq-scan-display {
+  background: var(--gray-1);
+  border-radius: 8px;
+  padding: .65rem .85rem;
+  margin: .75rem 0 .85rem;
+  min-height: 2.5rem;
   display: flex;
   align-items: center;
-  gap: .75rem;
 }
 
-.seq-step-label {
-  font-size: .82rem;
-  font-weight: 600;
-  color: var(--gray-4);
-  width: 48px;
-  flex-shrink: 0;
+.seq-scan-empty {
+  color: var(--gray-3);
+  font-size: .88rem;
+  margin: 0;
 }
 
-.seq-step-row select { flex: 1; }
+.seq-scan-steps {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .25rem;
+}
 
 /* ── Responsive tweaks ───────────────────────────────────────────────────── */
 @media (max-width: 500px) {

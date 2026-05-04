@@ -485,14 +485,27 @@ function _advanceFinger() {
 }
 
 // ── Step 2b: Sequences ────────────────────────────────────────────────────────
-let _seqBuilderLen = 2;
+let _seqScanSteps = [];
+let _seqScanning  = false;
+let _seqLineOff   = null;
 
 function goToSeqStep() {
   goToStep('2b');
-  document.getElementById('seq-builder').style.display = 'none';
-  document.getElementById('btn-add-seq').style.display = '';
+  _closeSeqBuilder();
   hideAlert('seq-send-error');
   _renderSeqList();
+}
+
+function _closeSeqBuilder() {
+  document.getElementById('seq-builder').style.display    = 'none';
+  document.getElementById('btn-add-seq').style.display    = '';
+  document.getElementById('seq-sensor-area').style.display = 'none';
+  document.getElementById('seq-pw-section').style.display = 'none';
+  document.getElementById('btn-seq-start-scan').style.display = '';
+  document.getElementById('btn-seq-done-scan').style.display  = 'none';
+  document.getElementById('btn-seq-undo').style.display        = 'none';
+  hideAlert('seq-scan-error');
+  hideAlert('seq-builder-error');
 }
 
 function _renderSeqList() {
@@ -521,80 +534,189 @@ function _renderSeqList() {
   }
 }
 
-function _renderSeqFingerPickers() {
-  const container = document.getElementById('seq-finger-pickers');
-  container.innerHTML = '';
-  for (let i = 0; i < _seqBuilderLen; i++) {
-    const div = document.createElement('div');
-    div.className = 'seq-step-row';
-    div.innerHTML = `
-      <span class="seq-step-label">Step ${i + 1}</span>
-      <select class="seq-finger-sel">
-        <option value="">— pick finger —</option>
-        ${[1,2,3,4,5].map(n => `<option value="${n}">Finger ${n}</option>`).join('')}
-      </select>
-    `;
-    container.appendChild(div);
+function _renderSeqScanSteps() {
+  const stepsEl = document.getElementById('seq-scan-steps');
+  const emptyEl = document.getElementById('seq-scan-empty');
+  const doneBtn = document.getElementById('btn-seq-done-scan');
+  const undoBtn = document.getElementById('btn-seq-undo');
+
+  if (_seqScanSteps.length === 0) {
+    stepsEl.innerHTML   = '';
+    emptyEl.style.display = '';
+    doneBtn.style.display = 'none';
+    undoBtn.style.display = 'none';
+  } else {
+    emptyEl.style.display = 'none';
+    stepsEl.innerHTML = _seqScanSteps
+      .map(s => `<span class="seq-dot">F${s}</span>`)
+      .join('<span class="seq-arrow"> → </span>');
+    undoBtn.style.display = _seqScanning ? '' : 'none';
+    if (_seqScanning && _seqScanSteps.length >= 2) doneBtn.style.display = '';
   }
 }
 
+function _setSeqSensor(sensorState, msg) {
+  const el    = document.getElementById('seq-sensor');
+  const icon  = document.getElementById('seq-sensor-icon');
+  const msgEl = document.getElementById('seq-sensor-msg');
+  el.className = 'sensor';
+  const map = {
+    waiting: { cls: 'waiting', sym: '&#9632;' },
+    placing: { cls: 'placing', sym: '&#8679;' },
+    success: { cls: 'success', sym: '&#10003;' },
+    fail:    { cls: 'fail',    sym: '&#10007;' },
+  };
+  const cfg = map[sensorState] || { cls: '', sym: '&#9632;' };
+  if (cfg.cls) el.classList.add(cfg.cls);
+  icon.innerHTML    = cfg.sym;
+  msgEl.textContent = msg;
+}
+
 document.getElementById('btn-add-seq').addEventListener('click', () => {
-  _seqBuilderLen = 2;
-  document.querySelectorAll('.seq-len-btn').forEach(b => b.classList.toggle('active', b.dataset.len === '2'));
+  _seqScanSteps = [];
+  _renderSeqScanSteps();
+  hideAlert('seq-scan-error');
+  hideAlert('seq-builder-error');
+  document.getElementById('seq-label').value    = '';
+  document.getElementById('seq-password').value = '';
+  document.getElementById('seq-pw-section').style.display = 'none';
+  document.getElementById('seq-builder').style.display    = '';
+  document.getElementById('btn-add-seq').style.display    = 'none';
+});
+
+document.getElementById('btn-seq-start-scan').addEventListener('click', async () => {
+  hideAlert('seq-scan-error');
+  _seqScanSteps = [];
+  _renderSeqScanSteps();
+
+  const startBtn = document.getElementById('btn-seq-start-scan');
+  startBtn.disabled = true;
+
+  try {
+    await send('START_SEQ_RECORD');
+    await waitFor('OK:SEQ_RECORD_STARTED', 5000);
+  } catch (e) {
+    showAlert('seq-scan-error', `Could not start scanning: ${e.message}`);
+    startBtn.disabled = false;
+    return;
+  }
+
+  _seqScanning = true;
+  startBtn.style.display = 'none';
+  startBtn.disabled = false;
+
+  document.getElementById('seq-sensor-area').style.display = '';
+  _setSeqSensor('waiting', 'Place a finger on the sensor.');
+
+  _seqLineOff = onLine(line => {
+    if (line.startsWith('SEQ_STEP:')) {
+      const slot = +line.split(':')[1];
+      if (_seqScanSteps.length >= 5) {
+        _setSeqSensor('fail', 'Maximum 5 fingers reached. Click Done Scanning.');
+        return;
+      }
+      _seqScanSteps.push(slot);
+      _setSeqSensor('success', `Finger ${slot} added — step ${_seqScanSteps.length}.`);
+      setTimeout(() => {
+        if (_seqScanning) {
+          _setSeqSensor('waiting',
+            _seqScanSteps.length >= 2
+              ? 'Scan another finger, or click Done Scanning.'
+              : 'Scan the next finger.');
+        }
+      }, 900);
+      _renderSeqScanSteps();
+    } else if (line.startsWith('SEQ_FAIL:')) {
+      _setSeqSensor('fail', 'Finger not recognised — try again.');
+      setTimeout(() => {
+        if (_seqScanning) _setSeqSensor('waiting', 'Place a finger on the sensor.');
+      }, 1200);
+    }
+  });
+});
+
+document.getElementById('btn-seq-undo').addEventListener('click', () => {
+  if (_seqScanSteps.length > 0) {
+    _seqScanSteps.pop();
+    _renderSeqScanSteps();
+    if (_seqScanning) {
+      _setSeqSensor('waiting',
+        _seqScanSteps.length === 0
+          ? 'Place a finger on the sensor.'
+          : 'Scan another finger, or click Done Scanning.');
+    }
+  }
+});
+
+document.getElementById('btn-seq-done-scan').addEventListener('click', async () => {
+  if (_seqLineOff) { _seqLineOff(); _seqLineOff = null; }
+  _seqScanning = false;
+
+  try {
+    await send('STOP_SEQ_RECORD');
+    await waitFor('OK:SEQ_RECORD_STOPPED', 3000).catch(() => {});
+  } catch (_) {}
+
+  document.getElementById('seq-sensor-area').style.display = 'none';
+  document.getElementById('btn-seq-done-scan').style.display  = 'none';
+  document.getElementById('btn-seq-undo').style.display        = 'none';
+  document.getElementById('btn-seq-start-scan').style.display = '';
+
+  // Validate: starting finger cannot be a single-finger trigger
+  const startSlot = _seqScanSteps[0];
+  if (state.fingers[startSlot - 1].enrolled) {
+    showAlert('seq-scan-error',
+      `Finger ${startSlot} is already a single-finger trigger. Re-scan with a different starting finger.`);
+    _seqScanSteps = [];
+    _renderSeqScanSteps();
+    return;
+  }
+
+  document.getElementById('seq-pw-section').style.display = '';
   document.getElementById('seq-label').value    = '';
   document.getElementById('seq-password').value = '';
   hideAlert('seq-builder-error');
-  _renderSeqFingerPickers();
-  document.getElementById('seq-builder').style.display = '';
-  document.getElementById('btn-add-seq').style.display = 'none';
 });
 
-document.getElementById('btn-seq-cancel').addEventListener('click', () => {
-  document.getElementById('seq-builder').style.display = 'none';
-  document.getElementById('btn-add-seq').style.display = '';
-});
-
-document.querySelectorAll('.seq-len-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.seq-len-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    _seqBuilderLen = +btn.dataset.len;
-    _renderSeqFingerPickers();
-  });
+document.getElementById('btn-seq-cancel').addEventListener('click', async () => {
+  if (_seqScanning) {
+    if (_seqLineOff) { _seqLineOff(); _seqLineOff = null; }
+    _seqScanning = false;
+    try {
+      await send('STOP_SEQ_RECORD');
+      await waitFor('OK:SEQ_RECORD_STOPPED', 2000).catch(() => {});
+    } catch (_) {}
+  }
+  _seqScanSteps = [];
+  _closeSeqBuilder();
 });
 
 document.getElementById('btn-seq-add').addEventListener('click', () => {
   hideAlert('seq-builder-error');
-  const sels  = document.querySelectorAll('.seq-finger-sel');
-  const steps = Array.from(sels).map(s => +s.value);
 
-  if (steps.some(s => !s)) {
-    return showAlert('seq-builder-error', 'Please select a finger for each step.');
+  if (_seqScanSteps.length < 2) {
+    return showAlert('seq-builder-error', 'A sequence needs at least 2 fingers.');
   }
-  if (!document.getElementById('seq-password').value) {
-    return showAlert('seq-builder-error', 'Please enter a password for this sequence.');
-  }
-  const startSlot = steps[0];
-  if (state.fingers[startSlot - 1].enrolled) {
-    return showAlert('seq-builder-error',
-      `Finger ${startSlot} is already a single-finger trigger. Choose a different starting finger.`);
-  }
-  if (new Set(steps).size !== steps.length) {
+  if (new Set(_seqScanSteps).size !== _seqScanSteps.length) {
     return showAlert('seq-builder-error', 'A sequence cannot use the same finger twice.');
   }
-  const key = steps.join(',');
+  const password = document.getElementById('seq-password').value;
+  if (!password) {
+    return showAlert('seq-builder-error', 'Please enter a password for this sequence.');
+  }
+  const key = _seqScanSteps.join(',');
   if (state.sequences.some(s => s.steps.join(',') === key)) {
     return showAlert('seq-builder-error', 'This exact sequence is already defined.');
   }
 
   state.sequences.push({
-    steps,
+    steps:    [..._seqScanSteps],
     label:    document.getElementById('seq-label').value.trim(),
-    password: document.getElementById('seq-password').value,
+    password,
   });
 
-  document.getElementById('seq-builder').style.display = 'none';
-  document.getElementById('btn-add-seq').style.display = '';
+  _seqScanSteps = [];
+  _closeSeqBuilder();
   _renderSeqList();
 });
 
