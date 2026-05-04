@@ -2,10 +2,334 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="0; url=webapp/">
-  <title>Password Dongle — Redirecting...</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Password Dongle — Setup</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <p>Redirecting to the setup wizard... <a href="webapp/">click here</a> if it does not happen automatically.</p>
+
+  <header>
+    <div class="header-inner">
+      <span class="brand">Password Dongle</span>
+      <span class="header-sub">Setup Wizard</span>
+    </div>
+  </header>
+
+  <!-- Progress bar (steps 1-4, step 0 = connect has no progress) -->
+  <div class="progress-bar" id="progress-bar" style="display:none">
+    <div class="pb-step" id="pb-1">
+      <div class="pb-circle">1</div>
+      <span>Secret Key</span>
+    </div>
+    <div class="pb-line"></div>
+    <div class="pb-step" id="pb-2">
+      <div class="pb-circle">2</div>
+      <span>Fingers</span>
+    </div>
+    <div class="pb-line"></div>
+    <div class="pb-step" id="pb-3">
+      <div class="pb-circle">3</div>
+      <span>Review</span>
+    </div>
+    <div class="pb-line"></div>
+    <div class="pb-step" id="pb-4">
+      <div class="pb-circle">4</div>
+      <span>Done</span>
+    </div>
+  </div>
+
+  <main>
+
+    <!-- ─────────────────── STEP 0: Connect ─────────────────── -->
+    <section id="step-0" class="step active">
+      <div class="card">
+        <h1>Welcome</h1>
+        <p class="lead">Let's get your fingerprint dongle set up in a few minutes.</p>
+
+        <div class="checklist">
+          <div class="check-item">
+            <span class="check-icon">&#10003;</span>
+            Your dongle is plugged into a USB port
+          </div>
+          <div class="check-item">
+            <span class="check-icon">&#10003;</span>
+            You are using Google Chrome or Microsoft Edge
+          </div>
+          <div class="check-item">
+            <span class="check-icon">&#10003;</span>
+            The dongle LED is glowing yellow (setup mode)
+          </div>
+        </div>
+
+        <div id="no-serial-warning" class="alert alert-warn" style="display:none">
+          Your browser does not support Web Serial. Please use Chrome or Edge on desktop.
+        </div>
+
+        <div id="connect-error" class="alert alert-error" style="display:none"></div>
+
+        <button id="btn-connect" class="btn-primary btn-lg">Connect Dongle</button>
+      </div>
+    </section>
+
+    <!-- ─────────────────── STEP 1: Secret Key ─────────────────── -->
+    <section id="step-1" class="step">
+      <div class="card">
+        <h2>Create Your Secret Key</h2>
+        <p>This key encrypts your passwords on the device. It is never sent anywhere — it stays between you and your dongle.</p>
+
+        <div class="alert alert-info">
+          Write this key down and keep it somewhere safe. If your dongle ever wipes itself after failed scans, you will need to enroll again and this key lets you prove it is your device.
+        </div>
+
+        <div class="form-group">
+          <label for="input-key">Secret Key</label>
+          <div class="pw-wrap">
+            <input id="input-key" type="password" placeholder="Choose a memorable passphrase" autocomplete="new-password">
+            <button class="toggle-pw" data-target="input-key" type="button">Show</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="input-key-confirm">Confirm Key</label>
+          <div class="pw-wrap">
+            <input id="input-key-confirm" type="password" placeholder="Type it again" autocomplete="new-password">
+            <button class="toggle-pw" data-target="input-key-confirm" type="button">Show</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="input-max-fails">Failed attempts before wipe</label>
+          <select id="input-max-fails">
+            <option value="3">3 attempts</option>
+            <option value="4">4 attempts</option>
+            <option value="5" selected>5 attempts (recommended)</option>
+            <option value="6">6 attempts</option>
+            <option value="7">7 attempts</option>
+            <option value="8">8 attempts</option>
+            <option value="9">9 attempts</option>
+            <option value="10">10 attempts</option>
+          </select>
+          <p class="field-hint">After this many wrong fingerprints in a row, all passwords and fingerprints are permanently wiped.</p>
+        </div>
+
+        <div id="key-error" class="alert alert-error" style="display:none"></div>
+
+        <div class="actions">
+          <button id="btn-key-next" class="btn-primary">Continue</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────────── STEP 2: Finger Setup ─────────────────── -->
+    <section id="step-2" class="step">
+      <div class="card">
+        <h2 id="finger-heading">Set Up Finger 1</h2>
+        <p id="finger-sub">Assign a label and the password this finger will type.</p>
+
+        <!-- Finger slot progress dots -->
+        <div class="finger-dots">
+          <div class="fd" id="fd-1" title="Finger 1">1</div>
+          <div class="fd" id="fd-2" title="Finger 2">2</div>
+          <div class="fd" id="fd-3" title="Finger 3">3</div>
+          <div class="fd" id="fd-4" title="Finger 4">4</div>
+          <div class="fd" id="fd-5" title="Finger 5">5</div>
+        </div>
+
+        <div class="form-group">
+          <label for="finger-label">Label <span class="optional">(optional)</span></label>
+          <input id="finger-label" type="text" placeholder="e.g. Work computer, Home Wi-Fi">
+        </div>
+
+        <div class="form-group">
+          <label for="finger-password">Password to type</label>
+          <div class="pw-wrap">
+            <input id="finger-password" type="password" placeholder="The exact text to type when this finger is scanned">
+            <button class="toggle-pw" data-target="finger-password" type="button">Show</button>
+          </div>
+          <button id="btn-generate" class="btn-link gen-trigger" type="button">Generate password</button>
+        </div>
+
+        <!-- Password Generator Panel -->
+        <div id="gen-panel" class="gen-panel" style="display:none">
+          <div class="gen-tabs">
+            <button class="gen-tab active" data-mode="random" type="button">Random</button>
+            <button class="gen-tab" data-mode="passphrase" type="button">Passphrase</button>
+          </div>
+          <div class="gen-length-row">
+            <div class="gen-length-header">
+              <span>Length</span>
+              <span><strong id="gen-length-val">16</strong> <span id="gen-length-unit">characters</span></span>
+            </div>
+            <input type="range" id="gen-length" min="8" max="32" value="16">
+          </div>
+          <div class="gen-output-row">
+            <input type="password" id="gen-output" class="gen-output" readonly placeholder="—">
+            <button id="btn-gen-show" class="btn-sm" type="button">Show</button>
+            <button id="btn-gen-regen" class="btn-sm" type="button" title="Regenerate">&#8635;</button>
+          </div>
+          <div class="gen-footer">
+            <button id="btn-gen-use" class="btn-sm btn-gen-use" type="button">Use this password</button>
+          </div>
+        </div>
+
+        <!-- Sensor status area (shown during / after enrollment) -->
+        <div class="sensor-area" id="sensor-area" style="display:none">
+          <div class="sensor" id="sensor">
+            <span id="sensor-icon" class="sensor-icon">&#9632;</span>
+          </div>
+          <p id="sensor-msg" class="sensor-msg">Ready</p>
+        </div>
+
+        <div id="enroll-error" class="alert alert-error" style="display:none"></div>
+
+        <div class="actions">
+          <button id="btn-enroll" class="btn-primary">Enroll Finger</button>
+          <button id="btn-next-finger" class="btn-secondary" style="display:none">Next Finger</button>
+        </div>
+
+        <div class="skip-links">
+          <button id="btn-skip-finger" class="btn-link">Skip this finger</button>
+          &nbsp;&bull;&nbsp;
+          <button id="btn-skip-all" class="btn-link">Skip to review</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────────── STEP 2b: Sequences ─────────────────── -->
+    <section id="step-2b" class="step">
+      <div class="card">
+        <h2>Finger Sequences <span class="optional">(Optional)</span></h2>
+        <p>A sequence types a password only when you scan 2–5 specific fingers in the exact order you define.</p>
+
+        <div class="alert alert-info">
+          A finger already set up as a single-finger trigger cannot <em>start</em> a sequence. Other positions are unrestricted.
+        </div>
+
+        <div id="seq-list" class="seq-list"></div>
+        <p id="seq-none" class="seq-none">No sequences added yet.</p>
+
+        <button id="btn-add-seq" class="btn-secondary" type="button">+ Add Sequence</button>
+
+        <!-- Sequence builder (hidden by default) -->
+        <div id="seq-builder" class="seq-builder" style="display:none">
+          <h3>New Sequence</h3>
+
+          <div class="form-group">
+            <label>Fingers in sequence</label>
+            <div class="seq-len-row">
+              <button class="seq-len-btn active" data-len="2" type="button">2</button>
+              <button class="seq-len-btn" data-len="3" type="button">3</button>
+              <button class="seq-len-btn" data-len="4" type="button">4</button>
+              <button class="seq-len-btn" data-len="5" type="button">5</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Finger order</label>
+            <div id="seq-finger-pickers" class="seq-finger-pickers">
+              <!-- populated dynamically -->
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="seq-label">Label <span class="optional">(optional)</span></label>
+            <input id="seq-label" type="text" placeholder="e.g. Bank login">
+          </div>
+
+          <div class="form-group">
+            <label for="seq-password">Password to type</label>
+            <div class="pw-wrap">
+              <input id="seq-password" type="password" placeholder="Password for this sequence">
+              <button class="toggle-pw" data-target="seq-password" type="button">Show</button>
+            </div>
+          </div>
+
+          <div id="seq-builder-error" class="alert alert-error" style="display:none"></div>
+
+          <div class="actions">
+            <button id="btn-seq-add" class="btn-primary" type="button">Add Sequence</button>
+            <button id="btn-seq-cancel" class="btn-secondary" type="button">Cancel</button>
+          </div>
+        </div>
+
+        <div id="seq-send-error" class="alert alert-error" style="display:none"></div>
+
+        <div class="actions" style="margin-top:2rem">
+          <button id="btn-seq-continue" class="btn-primary" type="button">Continue to Review</button>
+          <button id="btn-seq-back" class="btn-secondary" type="button">Back to Fingers</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────────── STEP 3: Review ─────────────────── -->
+    <section id="step-3" class="step">
+      <div class="card">
+        <h2>Review Your Setup</h2>
+        <p>Check that everything looks right before locking the device.</p>
+
+        <table class="review-table" id="review-table">
+          <thead>
+            <tr>
+              <th>Finger</th>
+              <th>Label</th>
+              <th>Password</th>
+            </tr>
+          </thead>
+          <tbody id="review-body"></tbody>
+        </table>
+
+        <div id="review-none" class="alert alert-warn" style="display:none">
+          No fingers were enrolled. Go back and set up at least one finger before locking.
+        </div>
+
+        <div class="alert alert-warn" style="margin-top:1.5rem">
+          After locking you cannot change passwords without a full device reset. Make sure your passwords are correct.
+        </div>
+
+        <div id="lockdown-error" class="alert alert-error" style="display:none"></div>
+
+        <div class="actions">
+          <button id="btn-lockdown" class="btn-primary btn-danger">Lock Down Device</button>
+          <button id="btn-back-to-fingers" class="btn-secondary">Go Back</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────────── STEP 4: Locking ─────────────────── -->
+    <section id="step-4" class="step">
+      <div class="card center">
+        <div class="spinner"></div>
+        <h2>Securing Your Device</h2>
+        <p>Please wait while the dongle locks itself down...</p>
+      </div>
+    </section>
+
+    <!-- ─────────────────── STEP 5: Done ─────────────────── -->
+    <section id="step-5" class="step">
+      <div class="card center">
+        <div class="done-circle">&#10003;</div>
+        <h2>Your Dongle is Ready</h2>
+        <p class="lead">Unplug and replug the dongle. Place an enrolled finger on the sensor — it will type the matching password into whatever is focused.</p>
+
+        <div class="summary-box">
+          <h3>What is protected</h3>
+          <ul>
+            <li>Passwords are AES-256-CTR encrypted on the device</li>
+            <li>5 failed scans wipe all data automatically</li>
+            <li>No drive or serial port is visible when in use</li>
+            <li>Setup app was removed from the device during lockdown</li>
+          </ul>
+        </div>
+
+        <p class="small-text">
+          If the device ever wipes itself after failed attempts, visit the
+          <a href="../recovery/index.html">recovery page</a> to reset and re-enrol.
+        </p>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
 </body>
 </html>
