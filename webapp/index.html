@@ -223,20 +223,22 @@
     <section id="step-3" class="step">
       <div class="card">
         <h2>Test Your Setup</h2>
-        <p>Scan your fingers to confirm each password triggers correctly. These scans do <strong>not</strong> count toward your failed-attempt limit.</p>
+        <p>Scan your fingers and watch the LED ring — in real use the device has no screen, so the LED is your only signal. Learn what each colour means here before you lock.</p>
 
-        <div class="alert alert-info" style="margin-top:1rem">
-          For multi-finger passwords, scan each finger one at a time in the exact order you set. Watch the result to see if each step is accepted.
-        </div>
-
-        <div class="sensor-area" id="test-sensor-area" style="display:none; margin-top:1.25rem">
-          <div class="sensor" id="test-sensor">
-            <span id="test-sensor-icon" class="sensor-icon">&#9632;</span>
+        <!-- LED widget — always visible, mirrors the physical sensor ring -->
+        <div class="sensor-area" style="padding-bottom:.5rem">
+          <div class="sensor led-idle" id="test-sensor">
+            <span id="test-sensor-icon" class="sensor-icon">&#9679;</span>
           </div>
-          <p id="test-sensor-msg" class="sensor-msg">Ready</p>
+          <p id="test-sensor-msg" class="sensor-msg">Tap Scan Finger when ready.</p>
         </div>
 
-        <div id="test-result" class="test-result-box" style="display:none; margin-top:1rem"></div>
+        <!-- Colour legend -->
+        <div class="led-legend">
+          <div class="led-legend-row"><span class="led-pip led-pip-blue"></span>Blue flash &mdash; password matched, typing now</div>
+          <div class="led-legend-row"><span class="led-pip led-pip-yellow"></span>Yellow flash &mdash; sequence step accepted, scan next finger</div>
+          <div class="led-legend-row"><span class="led-pip led-pip-red"></span>Red flash &mdash; no match or wrong sequence step</div>
+        </div>
 
         <div id="test-history" class="test-history"></div>
 

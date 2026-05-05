@@ -615,30 +615,28 @@ function _initTestStep() {
   _testSeqBuf  = [];
   _testScanGen++;
   _testHistory = [];
-  document.getElementById('test-sensor-area').style.display = 'none';
-  document.getElementById('test-result').style.display      = 'none';
-  document.getElementById('test-result').innerHTML          = '';
-  document.getElementById('test-history').innerHTML         = '';
-  document.getElementById('btn-test-scan').disabled         = false;
-  document.getElementById('btn-test-scan').textContent      = 'Scan Finger';
-  document.getElementById('btn-test-continue').disabled     = false;
+  _setTestLED('idle');
+  document.getElementById('test-history').innerHTML     = '';
+  document.getElementById('btn-test-scan').disabled     = false;
+  document.getElementById('btn-test-scan').textContent  = 'Scan Finger';
+  document.getElementById('btn-test-continue').disabled = false;
   hideAlert('test-error');
 }
 
-function _setTestSensor(s, msg) {
+function _setTestLED(state) {
   const el    = document.getElementById('test-sensor');
-  const icon  = document.getElementById('test-sensor-icon');
   const msgEl = document.getElementById('test-sensor-msg');
   el.className = 'sensor';
   const map = {
-    waiting: { cls: 'waiting', sym: '&#9632;' },
-    success: { cls: 'success', sym: '&#10003;' },
-    fail:    { cls: 'fail',    sym: '&#10007;' },
+    'idle':         { cls: 'led-idle',         msg: 'Tap Scan Finger when ready.' },
+    'scanning':     { cls: 'led-scanning',     msg: 'Place your finger on the sensor…' },
+    'flash-blue':   { cls: 'led-flash-blue',   msg: 'Blue flash — password matched.' },
+    'flash-yellow': { cls: 'led-flash-yellow', msg: 'Yellow flash — step accepted, scan the next finger.' },
+    'flash-red':    { cls: 'led-flash-red',    msg: 'Red flash — no match. Try again from the first finger.' },
   };
-  const cfg = map[s] || { cls: '', sym: '&#9632;' };
-  if (cfg.cls) el.classList.add(cfg.cls);
-  icon.innerHTML    = cfg.sym;
-  msgEl.textContent = msg;
+  const cfg = map[state] || map['idle'];
+  el.classList.add(cfg.cls);
+  msgEl.textContent = cfg.msg;
 }
 
 function _testMatchSlot(slot) {
@@ -655,42 +653,10 @@ function _testMatchSlot(slot) {
     p.steps.length > _testSeqBuf.length &&
     _testSeqBuf.every((s, i) => s === p.steps[i])
   );
-  if (isPrefix) {
-    return { type: 'partial', step: _testSeqBuf.length };
-  }
+  if (isPrefix) return { type: 'partial' };
 
   _testSeqBuf = [];
   return { type: 'no_match' };
-}
-
-function _showTestResult(result) {
-  const el = document.getElementById('test-result');
-  el.style.display = '';
-
-  if (result.type === 'match') {
-    const dots = '•'.repeat(Math.min(result.pw.password.length, 12));
-    el.className = 'test-result-box test-match';
-    el.innerHTML = `<strong>&#10003; Match</strong> — ${result.pw.label || '<em>no label</em>'}&nbsp; <span class="test-pw-dots">${dots}</span>`;
-    _testHistory.unshift({ cls: 'match', text: result.pw.label || 'no label' });
-  } else if (result.type === 'partial') {
-    el.className = 'test-result-box test-partial';
-    el.innerHTML = `<strong>Step ${result.step} accepted</strong> — scan the next finger in the sequence.`;
-  } else if (result.type === 'no_match') {
-    el.className = 'test-result-box test-fail';
-    el.innerHTML = `<strong>&#10007; No match</strong> — wrong finger or sequence broken. Try again from the start.`;
-    _testSeqBuf = [];
-    _testHistory.unshift({ cls: 'fail', text: 'no match' });
-  } else if (result.type === 'unenrolled') {
-    el.className = 'test-result-box test-fail';
-    el.innerHTML = `<strong>&#10007; Not enrolled</strong> — this finger was not set up.`;
-    _testHistory.unshift({ cls: 'fail', text: 'not enrolled' });
-  } else {
-    el.className = 'test-result-box test-warn';
-    el.innerHTML = `No finger detected — tap Scan Finger and try again.`;
-  }
-
-  if (_testHistory.length > 5) _testHistory.length = 5;
-  _renderTestHistory();
 }
 
 function _renderTestHistory() {
@@ -703,7 +669,7 @@ function _renderTestHistory() {
 }
 
 document.getElementById('btn-test-scan').addEventListener('click', async () => {
-  const gen = ++_testScanGen;
+  const gen         = ++_testScanGen;
   const scanBtn     = document.getElementById('btn-test-scan');
   const continueBtn = document.getElementById('btn-test-continue');
 
@@ -711,18 +677,15 @@ document.getElementById('btn-test-scan').addEventListener('click', async () => {
   scanBtn.textContent  = 'Scanning...';
   continueBtn.disabled = true;
   hideAlert('test-error');
-  document.getElementById('test-sensor-area').style.display = '';
-  _setTestSensor('waiting', _testSeqBuf.length > 0
-    ? `Scan finger ${_testSeqBuf.length + 1} of the sequence.`
-    : 'Place your finger on the sensor.');
+  _setTestLED('scanning');
 
   let line;
   try {
-    await send('SCAN_FINGER');
+    await send('SCAN_FINGER_QUIET');
     line = await waitForAny(['SCANNED:', 'SCAN_UNENROLLED', 'FAIL:'], 15000);
   } catch (e) {
     if (gen !== _testScanGen) return;
-    document.getElementById('test-sensor-area').style.display = 'none';
+    _setTestLED('idle');
     showAlert('test-error', `Scan error: ${e.message}`);
     scanBtn.disabled     = false;
     scanBtn.textContent  = 'Scan Finger';
@@ -731,22 +694,45 @@ document.getElementById('btn-test-scan').addEventListener('click', async () => {
   }
   if (gen !== _testScanGen) return;
 
-  document.getElementById('test-sensor-area').style.display = 'none';
-
   let result;
   if (line.startsWith('SCANNED:')) {
-    const slot = +line.split(':')[1];
-    _setTestSensor('success', `Finger ${slot} recognised.`);
-    result = _testMatchSlot(slot);
+    result = _testMatchSlot(+line.split(':')[1]);
   } else if (line === 'SCAN_UNENROLLED') {
-    _setTestSensor('fail', 'Finger not enrolled.');
     _testSeqBuf = [];
     result = { type: 'unenrolled' };
   } else {
     result = { type: 'timeout' };
   }
 
-  _showTestResult(result);
+  // Drive the physical LED to match exactly what locked mode would show,
+  // then update the on-screen LED widget to the same colour.
+  if (result.type === 'match') {
+    send('SET_LED:2:2').catch(() => {});          // flash blue
+    _setTestLED('flash-blue');
+    _testHistory.unshift({ cls: 'match', text: result.pw.label || 'no label' });
+  } else if (result.type === 'partial') {
+    send('SET_LED:3:2').catch(() => {});          // flash yellow
+    _setTestLED('flash-yellow');
+  } else if (result.type === 'no_match' || result.type === 'unenrolled') {
+    send('SET_LED:1:2').catch(() => {});          // flash red
+    _setTestLED('flash-red');
+    _testHistory.unshift({ cls: 'fail', text: result.type === 'unenrolled' ? 'not enrolled' : 'no match' });
+  } else {
+    _setTestLED('idle');
+  }
+
+  if (_testHistory.length > 5) _testHistory.length = 5;
+  _renderTestHistory();
+
+  // After the flash settles, reset physical LED to setup-idle and screen to idle
+  if (result.type !== 'partial' && result.type !== 'timeout') {
+    const g = gen;
+    setTimeout(() => {
+      if (_testScanGen !== g) return;
+      send('SET_LED:3:1').catch(() => {});        // setup idle = solid yellow
+      _setTestLED('idle');
+    }, 1500);
+  }
 
   scanBtn.disabled    = false;
   scanBtn.textContent = result.type === 'partial'
