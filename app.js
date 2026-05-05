@@ -234,11 +234,11 @@ function goToStep(n) {
   document.getElementById(`step-${n}`).classList.add('active');
 
   const bar = document.getElementById('progress-bar');
-  bar.style.display = n >= 1 && n <= 4 ? '' : 'none';
+  bar.style.display = n >= 1 && n <= 5 ? '' : 'none';
 
-  const pbMap = { 1: 1, 2: 2, 3: 3, 4: 3, 5: 4 };
+  const pbMap = { 1: 1, 2: 2, 3: 3, 4: 4, 5: 4, 6: 5 };
   const active = pbMap[n] || 0;
-  [1, 2, 3, 4].forEach(i => {
+  [1, 2, 3, 4, 5].forEach(i => {
     const el = document.getElementById(`pb-${i}`);
     el.classList.remove('active', 'done');
     if (i < active)  el.classList.add('done');
@@ -593,13 +593,173 @@ document.getElementById('btn-pw-save').addEventListener('click', () => {
   _renderPwList();
 });
 
-document.getElementById('btn-step2-continue').addEventListener('click', async () => {
+document.getElementById('btn-step2-continue').addEventListener('click', () => {
   hideAlert('step2-error');
   if (state.passwords.length === 0) {
     return showAlert('step2-error', 'Please add at least one password before continuing.');
   }
+  goToStep(3);
+  _initTestStep();
+});
 
-  const btn = document.getElementById('btn-step2-continue');
+document.getElementById('btn-step2-back').addEventListener('click', () => {
+  goToStep(1);
+});
+
+// ── Step 3: Test ──────────────────────────────────────────────────────────────
+let _testSeqBuf  = [];
+let _testScanGen = 0;
+let _testHistory = [];
+
+function _initTestStep() {
+  _testSeqBuf  = [];
+  _testScanGen++;
+  _testHistory = [];
+  document.getElementById('test-sensor-area').style.display = 'none';
+  document.getElementById('test-result').style.display      = 'none';
+  document.getElementById('test-result').innerHTML          = '';
+  document.getElementById('test-history').innerHTML         = '';
+  document.getElementById('btn-test-scan').disabled         = false;
+  document.getElementById('btn-test-scan').textContent      = 'Scan Finger';
+  document.getElementById('btn-test-continue').disabled     = false;
+  hideAlert('test-error');
+}
+
+function _setTestSensor(s, msg) {
+  const el    = document.getElementById('test-sensor');
+  const icon  = document.getElementById('test-sensor-icon');
+  const msgEl = document.getElementById('test-sensor-msg');
+  el.className = 'sensor';
+  const map = {
+    waiting: { cls: 'waiting', sym: '&#9632;' },
+    success: { cls: 'success', sym: '&#10003;' },
+    fail:    { cls: 'fail',    sym: '&#10007;' },
+  };
+  const cfg = map[s] || { cls: '', sym: '&#9632;' };
+  if (cfg.cls) el.classList.add(cfg.cls);
+  icon.innerHTML    = cfg.sym;
+  msgEl.textContent = msg;
+}
+
+function _testMatchSlot(slot) {
+  _testSeqBuf.push(slot);
+  const key = _testSeqBuf.join(',');
+
+  const match = state.passwords.find(p => p.steps.join(',') === key);
+  if (match) {
+    _testSeqBuf = [];
+    return { type: 'match', pw: match };
+  }
+
+  const isPrefix = state.passwords.some(p =>
+    p.steps.length > _testSeqBuf.length &&
+    _testSeqBuf.every((s, i) => s === p.steps[i])
+  );
+  if (isPrefix) {
+    return { type: 'partial', step: _testSeqBuf.length };
+  }
+
+  _testSeqBuf = [];
+  return { type: 'no_match' };
+}
+
+function _showTestResult(result) {
+  const el = document.getElementById('test-result');
+  el.style.display = '';
+
+  if (result.type === 'match') {
+    const dots = '•'.repeat(Math.min(result.pw.password.length, 12));
+    el.className = 'test-result-box test-match';
+    el.innerHTML = `<strong>&#10003; Match</strong> — ${result.pw.label || '<em>no label</em>'}&nbsp; <span class="test-pw-dots">${dots}</span>`;
+    _testHistory.unshift({ cls: 'match', text: result.pw.label || 'no label' });
+  } else if (result.type === 'partial') {
+    el.className = 'test-result-box test-partial';
+    el.innerHTML = `<strong>Step ${result.step} accepted</strong> — scan the next finger in the sequence.`;
+  } else if (result.type === 'no_match') {
+    el.className = 'test-result-box test-fail';
+    el.innerHTML = `<strong>&#10007; No match</strong> — wrong finger or sequence broken. Try again from the start.`;
+    _testSeqBuf = [];
+    _testHistory.unshift({ cls: 'fail', text: 'no match' });
+  } else if (result.type === 'unenrolled') {
+    el.className = 'test-result-box test-fail';
+    el.innerHTML = `<strong>&#10007; Not enrolled</strong> — this finger was not set up.`;
+    _testHistory.unshift({ cls: 'fail', text: 'not enrolled' });
+  } else {
+    el.className = 'test-result-box test-warn';
+    el.innerHTML = `No finger detected — tap Scan Finger and try again.`;
+  }
+
+  if (_testHistory.length > 5) _testHistory.length = 5;
+  _renderTestHistory();
+}
+
+function _renderTestHistory() {
+  const el = document.getElementById('test-history');
+  if (_testHistory.length === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = '<p class="test-history-label">Recent scans:</p>' +
+    _testHistory.map(h =>
+      `<span class="test-pill test-pill-${h.cls}">${h.text}</span>`
+    ).join('');
+}
+
+document.getElementById('btn-test-scan').addEventListener('click', async () => {
+  const gen = ++_testScanGen;
+  const scanBtn     = document.getElementById('btn-test-scan');
+  const continueBtn = document.getElementById('btn-test-continue');
+
+  scanBtn.disabled     = true;
+  scanBtn.textContent  = 'Scanning...';
+  continueBtn.disabled = true;
+  hideAlert('test-error');
+  document.getElementById('test-sensor-area').style.display = '';
+  _setTestSensor('waiting', _testSeqBuf.length > 0
+    ? `Scan finger ${_testSeqBuf.length + 1} of the sequence.`
+    : 'Place your finger on the sensor.');
+
+  let line;
+  try {
+    await send('SCAN_FINGER');
+    line = await waitForAny(['SCANNED:', 'SCAN_UNENROLLED', 'FAIL:'], 15000);
+  } catch (e) {
+    if (gen !== _testScanGen) return;
+    document.getElementById('test-sensor-area').style.display = 'none';
+    showAlert('test-error', `Scan error: ${e.message}`);
+    scanBtn.disabled     = false;
+    scanBtn.textContent  = 'Scan Finger';
+    continueBtn.disabled = false;
+    return;
+  }
+  if (gen !== _testScanGen) return;
+
+  document.getElementById('test-sensor-area').style.display = 'none';
+
+  let result;
+  if (line.startsWith('SCANNED:')) {
+    const slot = +line.split(':')[1];
+    _setTestSensor('success', `Finger ${slot} recognised.`);
+    result = _testMatchSlot(slot);
+  } else if (line === 'SCAN_UNENROLLED') {
+    _setTestSensor('fail', 'Finger not enrolled.');
+    _testSeqBuf = [];
+    result = { type: 'unenrolled' };
+  } else {
+    result = { type: 'timeout' };
+  }
+
+  _showTestResult(result);
+
+  scanBtn.disabled    = false;
+  scanBtn.textContent = result.type === 'partial'
+    ? `Scan Finger ${_testSeqBuf.length + 1}`
+    : 'Scan Again';
+  continueBtn.disabled = false;
+});
+
+document.getElementById('btn-test-continue').addEventListener('click', async () => {
+  hideAlert('test-error');
+  _testScanGen++;  // cancel any in-flight scan
+
+  const btn = document.getElementById('btn-test-continue');
   btn.disabled    = true;
   btn.textContent = 'Saving...';
 
@@ -615,21 +775,24 @@ document.getElementById('btn-step2-continue').addEventListener('click', async ()
         await waitFor(`OK:SEQ_PASSWORD:${key}`, 6000);
       }
     }
-    goToStep(3);
+    goToStep(4);
     _renderReview();
   } catch (e) {
-    showAlert('step2-error', `Error saving passwords: ${e.message}`);
+    showAlert('test-error', `Error saving passwords: ${e.message}`);
   } finally {
     btn.disabled    = false;
     btn.textContent = 'Continue to Review';
   }
 });
 
-document.getElementById('btn-step2-back').addEventListener('click', () => {
-  goToStep(1);
+document.getElementById('btn-test-back').addEventListener('click', () => {
+  _testScanGen++;
+  _testSeqBuf = [];
+  goToStep(2);
+  _renderPwList();
 });
 
-// ── Step 3: Review ────────────────────────────────────────────────────────────
+// ── Step 4: Review ────────────────────────────────────────────────────────────
 function _renderReview() {
   const tbody = document.getElementById('review-body');
   const none  = document.getElementById('review-none');
@@ -652,8 +815,8 @@ function _renderReview() {
 }
 
 document.getElementById('btn-back-to-fingers').addEventListener('click', () => {
-  goToStep(2);
-  _renderPwList();
+  goToStep(3);
+  _initTestStep();
 });
 
 document.getElementById('btn-lockdown').addEventListener('click', async () => {
@@ -667,9 +830,9 @@ document.getElementById('btn-lockdown').addEventListener('click', async () => {
   try {
     await send('LOCK_DOWN');
     await waitFor('LOCKING', 8000);
-    goToStep(4);
+    goToStep(5);
     // Device reboots after ~300ms; show locking screen briefly then done
-    setTimeout(() => goToStep(5), 2500);
+    setTimeout(() => goToStep(6), 2500);
   } catch (e) {
     showAlert('lockdown-error', `Lock failed: ${e.message}`);
     btn.disabled    = false;

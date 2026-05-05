@@ -694,6 +694,46 @@ input[type="range"] {
 .trigger-count-btn:hover { background: var(--blue-l); border-color: var(--blue); }
 .trigger-count-btn.active { background: var(--blue); border-color: var(--blue); color: #fff; }
 
+/* ── Test step ───────────────────────────────────────────────────────────── */
+.test-result-box {
+  border-radius: 8px;
+  padding: .7rem 1rem;
+  font-size: .92rem;
+  border: 1.5px solid transparent;
+}
+
+.test-match   { background: var(--green-l); border-color: var(--green); color: #065f46; }
+.test-partial { background: var(--amber-l); border-color: var(--amber); color: #78350f; }
+.test-fail    { background: var(--red-l);   border-color: var(--red);   color: #991b1b; }
+.test-warn    { background: var(--amber-l); border-color: var(--amber); color: #78350f; }
+
+.test-pw-dots { font-family: monospace; letter-spacing: .05em; }
+
+.test-history {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem;
+  margin-top: .85rem;
+  min-height: 1.5rem;
+}
+
+.test-history-label {
+  font-size: .78rem;
+  color: var(--gray-3);
+  margin: 0;
+}
+
+.test-pill {
+  font-size: .75rem;
+  font-weight: 600;
+  padding: .18rem .55rem;
+  border-radius: 20px;
+}
+
+.test-pill-match { background: var(--green-l); color: #065f46; }
+.test-pill-fail  { background: var(--red-l);   color: #991b1b; }
+
 /* ── Responsive tweaks ───────────────────────────────────────────────────── */
 @media (max-width: 500px) {
   .card { padding: 1.5rem 1.25rem; }

@@ -15,7 +15,7 @@
     </div>
   </header>
 
-  <!-- Progress bar (steps 1-4, step 0 = connect has no progress) -->
+  <!-- Progress bar (steps 1-5, step 0 = connect has no progress) -->
   <div class="progress-bar" id="progress-bar" style="display:none">
     <div class="pb-step" id="pb-1">
       <div class="pb-circle">1</div>
@@ -29,11 +29,16 @@
     <div class="pb-line"></div>
     <div class="pb-step" id="pb-3">
       <div class="pb-circle">3</div>
-      <span>Review</span>
+      <span>Test</span>
     </div>
     <div class="pb-line"></div>
     <div class="pb-step" id="pb-4">
       <div class="pb-circle">4</div>
+      <span>Review</span>
+    </div>
+    <div class="pb-line"></div>
+    <div class="pb-step" id="pb-5">
+      <div class="pb-circle">5</div>
       <span>Done</span>
     </div>
   </div>
@@ -214,8 +219,42 @@
       </div>
     </section>
 
-    <!-- ─────────────────── STEP 3: Review ─────────────────── -->
+    <!-- ─────────────────── STEP 3: Test ─────────────────── -->
     <section id="step-3" class="step">
+      <div class="card">
+        <h2>Test Your Setup</h2>
+        <p>Scan your fingers to confirm each password triggers correctly. These scans do <strong>not</strong> count toward your failed-attempt limit.</p>
+
+        <div class="alert alert-info" style="margin-top:1rem">
+          For multi-finger passwords, scan each finger one at a time in the exact order you set. Watch the result to see if each step is accepted.
+        </div>
+
+        <div class="sensor-area" id="test-sensor-area" style="display:none; margin-top:1.25rem">
+          <div class="sensor" id="test-sensor">
+            <span id="test-sensor-icon" class="sensor-icon">&#9632;</span>
+          </div>
+          <p id="test-sensor-msg" class="sensor-msg">Ready</p>
+        </div>
+
+        <div id="test-result" class="test-result-box" style="display:none; margin-top:1rem"></div>
+
+        <div id="test-history" class="test-history"></div>
+
+        <div id="test-error" class="alert alert-error" style="display:none"></div>
+
+        <div class="actions" style="margin-top:1.25rem">
+          <button id="btn-test-scan" class="btn-primary" type="button">Scan Finger</button>
+        </div>
+
+        <div class="actions" style="margin-top:1.5rem; border-top:1px solid var(--gray-2); padding-top:1.5rem">
+          <button id="btn-test-continue" class="btn-primary" type="button">Continue to Review</button>
+          <button id="btn-test-back" class="btn-secondary" type="button">Back</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────────── STEP 4: Review ─────────────────── -->
+    <section id="step-4" class="step">
       <div class="card">
         <h2>Review Your Setup</h2>
         <p>Check that everything looks right before locking the device.</p>
@@ -248,8 +287,8 @@
       </div>
     </section>
 
-    <!-- ─────────────────── STEP 4: Locking ─────────────────── -->
-    <section id="step-4" class="step">
+    <!-- ─────────────────── STEP 5: Locking ─────────────────── -->
+    <section id="step-5" class="step">
       <div class="card center">
         <div class="spinner"></div>
         <h2>Securing Your Device</h2>
@@ -257,8 +296,8 @@
       </div>
     </section>
 
-    <!-- ─────────────────── STEP 5: Done ─────────────────── -->
-    <section id="step-5" class="step">
+    <!-- ─────────────────── STEP 6: Done ─────────────────── -->
+    <section id="step-6" class="step">
       <div class="card center">
         <div class="done-circle">&#10003;</div>
         <h2>Your Dongle is Ready</h2>
