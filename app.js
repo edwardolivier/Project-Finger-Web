@@ -47,6 +47,9 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
 async function connectSerial() {
   const port = await navigator.serial.requestPort();
   await port.open({ baudRate: 115200 });
+  // Assert DTR so CircuitPython's data port marks itself as connected
+  // and begins accepting/sending data. WebSerial does not do this by default.
+  await port.setSignals({ dataTerminalReady: true, requestToSend: true });
 
   state.port   = port;
   state.writer = port.writable.getWriter();
