@@ -56,15 +56,14 @@ async function connectSerial() {
 }
 
 async function _readLoop(port) {
-  const decoder = new TextDecoderStream();
-  port.readable.pipeTo(decoder.writable);
-  const reader  = decoder.readable.getReader();
+  const reader  = port.readable.getReader();
+  const decoder = new TextDecoder();
 
   try {
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
-      state.readBuffer += value;
+      state.readBuffer += decoder.decode(value, { stream: true });
       const parts = state.readBuffer.split('\n');
       state.readBuffer = parts.pop();   // keep incomplete tail
       for (const part of parts) {
@@ -271,25 +270,44 @@ document.getElementById('btn-connect').addEventListener('click', async () => {
   try {
     await connectSerial();
 
-    // Retry PING to handle the case where opening the port triggers a
-    // CircuitPython restart (device takes ~2s to reboot).
-    // Attempt 1: immediately (device already running)
-    // Attempts 2-4: after growing delays (device just reset)
-    const delays = [0, 1500, 2000, 2500];
+    // On Windows, opening the console port can trigger a CircuitPython soft
+    // reboot (DTR assertion). Strategy:
+    //  • Start listening for READY:SETUP_MODE immediately (device sends this on
+    //    each boot, ~2-5 s after reset).
+    //  • Also retry PING for the case where the device was already running and
+    //    did NOT reset on port-open.
+    // Whichever arrives first wins; if READY is seen we then confirm with PING.
     let ponged = false;
-    for (let i = 0; i < delays.length; i++) {
-      if (delays[i]) await new Promise(r => setTimeout(r, delays[i]));
+
+    const readyPromise = waitFor('READY:SETUP_MODE', 15000).catch(() => null);
+
+    const pingDelays = [200, 2000, 3500, 5000];
+    for (let i = 0; i < pingDelays.length && !ponged; i++) {
+      if (pingDelays[i]) await new Promise(r => setTimeout(r, pingDelays[i]));
       try {
         await send('PING');
-        await waitFor('PONG', 2000);
+        await waitFor('PONG', 3000);
         ponged = true;
-        break;
       } catch (_) {
-        if (i < delays.length - 1) {
-          btn.textContent = `Connecting… (${i + 2}/${delays.length})`;
+        if (i < pingDelays.length - 1) {
+          btn.textContent = `Connecting… (${i + 2}/${pingDelays.length})`;
         }
       }
     }
+
+    // PING retries all failed — wait to see if READY arrives (device booting slowly)
+    if (!ponged) {
+      btn.textContent = 'Connecting… waiting for device…';
+      const ready = await readyPromise;
+      if (ready) {
+        try {
+          await send('PING');
+          await waitFor('PONG', 5000);
+          ponged = true;
+        } catch (_) {}
+      }
+    }
+
     if (!ponged) throw new Error('Timeout waiting for "PONG"');
 
     goToStep(1);
@@ -617,44 +635,41 @@ function _initTestStep() {
   _testHistory = [];
   _setTestLED('idle');
   document.getElementById('test-history').innerHTML     = '';
-  document.getElementById('btn-test-scan').disabled     = false;
-  document.getElementById('btn-test-scan').textContent  = 'Scan Finger';
   document.getElementById('btn-test-continue').disabled = false;
   hideAlert('test-error');
+  _autoTestLoop(_testScanGen);
 }
 
-function _setTestLED(state) {
+function _setTestLED(s) {
   const el    = document.getElementById('test-sensor');
   const msgEl = document.getElementById('test-sensor-msg');
   el.className = 'sensor';
   const map = {
-    'idle':         { cls: 'led-idle',         msg: 'Tap Scan Finger when ready.' },
-    'scanning':     { cls: 'led-scanning',     msg: 'Place your finger on the sensor…' },
-    'flash-blue':   { cls: 'led-flash-blue',   msg: 'Blue flash — password matched.' },
-    'flash-yellow': { cls: 'led-flash-yellow', msg: 'Yellow flash — step accepted, scan the next finger.' },
-    'flash-red':    { cls: 'led-flash-red',    msg: 'Red flash — no match. Try again from the first finger.' },
+    'idle':       { cls: 'led-idle',       msg: '' },
+    'scanning':   { cls: 'led-scanning',   msg: 'Place your finger on the sensor.' },
+    'flash-blue': { cls: 'led-flash-blue', msg: 'Blue flash — password matched.' },
+    'flash-pink': { cls: 'led-flash-pink', msg: 'Pink flash — step accepted, scan the next finger.' },
+    'flash-red':  { cls: 'led-flash-red',  msg: 'Red flash — no match. Try again from the first finger.' },
   };
-  const cfg = map[state] || map['idle'];
+  const cfg = map[s] || map['idle'];
   el.classList.add(cfg.cls);
-  msgEl.textContent = cfg.msg;
+  if (cfg.msg) msgEl.textContent = cfg.msg;
+}
+
+function _setTestMsg(msg) {
+  document.getElementById('test-sensor-msg').textContent = msg;
 }
 
 function _testMatchSlot(slot) {
   _testSeqBuf.push(slot);
   const key = _testSeqBuf.join(',');
-
   const match = state.passwords.find(p => p.steps.join(',') === key);
-  if (match) {
-    _testSeqBuf = [];
-    return { type: 'match', pw: match };
-  }
-
+  if (match) { _testSeqBuf = []; return { type: 'match', pw: match }; }
   const isPrefix = state.passwords.some(p =>
     p.steps.length > _testSeqBuf.length &&
     _testSeqBuf.every((s, i) => s === p.steps[i])
   );
   if (isPrefix) return { type: 'partial' };
-
   _testSeqBuf = [];
   return { type: 'no_match' };
 }
@@ -663,87 +678,134 @@ function _renderTestHistory() {
   const el = document.getElementById('test-history');
   if (_testHistory.length === 0) { el.innerHTML = ''; return; }
   el.innerHTML = '<p class="test-history-label">Recent scans:</p>' +
-    _testHistory.map(h =>
-      `<span class="test-pill test-pill-${h.cls}">${h.text}</span>`
-    ).join('');
+    _testHistory.map(h => `<span class="test-pill test-pill-${h.cls}">${h.text}</span>`).join('');
 }
 
-document.getElementById('btn-test-scan').addEventListener('click', async () => {
-  const gen         = ++_testScanGen;
-  const scanBtn     = document.getElementById('btn-test-scan');
-  const continueBtn = document.getElementById('btn-test-continue');
-
-  scanBtn.disabled     = true;
-  scanBtn.textContent  = 'Scanning...';
-  continueBtn.disabled = true;
-  hideAlert('test-error');
-  _setTestLED('scanning');
-
-  let line;
+async function _abortActiveScan() {
   try {
-    await send('SCAN_FINGER_QUIET');
-    line = await waitForAny(['SCANNED:', 'SCAN_UNENROLLED', 'FAIL:'], 15000);
-  } catch (e) {
+    await send('ABORT_SCAN');
+    await waitFor('OK:ABORTED', 1500).catch(() => {});
+  } catch (_) {}
+}
+
+async function _autoTestLoop(gen) {
+  if (gen !== _testScanGen) return;
+  _setTestLED('idle');
+  for (let n = 2; n >= 1; n--) {
     if (gen !== _testScanGen) return;
-    _setTestLED('idle');
-    showAlert('test-error', `Scan error: ${e.message}`);
-    scanBtn.disabled     = false;
-    scanBtn.textContent  = 'Scan Finger';
-    continueBtn.disabled = false;
-    return;
+    _setTestMsg(`Scanning in ${n}…`);
+    await delay(1000);
   }
   if (gen !== _testScanGen) return;
+  _runSingleScan(gen);
+}
 
-  let result;
-  if (line.startsWith('SCANNED:')) {
-    result = _testMatchSlot(+line.split(':')[1]);
-  } else if (line === 'SCAN_UNENROLLED') {
-    _testSeqBuf = [];
-    result = { type: 'unenrolled' };
+async function _runSingleScan(gen) {
+  if (gen !== _testScanGen) return;
+
+  const seqStep = _testSeqBuf.length + 1;
+  const inSeq   = _testSeqBuf.length > 0;
+
+  _setTestLED('scanning');
+  if (!inSeq) _setTestMsg('Place your finger on the sensor.');
+
+  let scanLine  = null;
+  let scanDone  = false;
+  let scanError = false;
+  const scanPromise = (async () => {
+    try {
+      await send('SCAN_FINGER_QUIET');
+      scanLine = await waitForAny(
+        ['SCANNED:', 'SCAN_UNENROLLED', 'FAIL:', 'OK:ABORTED'], 16000
+      );
+    } catch (_) { scanError = true; }
+    scanDone = true;
+  })();
+
+  if (inSeq) {
+    for (let n = 5; n >= 1; n--) {
+      if (gen !== _testScanGen) return;
+      _setTestMsg(`Scan finger ${seqStep} — ${n}s`);
+      await delay(1000);
+      if (scanDone) break;
+    }
+    if (gen !== _testScanGen) return;
+
+    if (!scanDone) {
+      try {
+        await send('ABORT_SCAN');
+        await waitFor('OK:ABORTED', 1500).catch(() => {});
+      } catch (_) {}
+      await scanPromise;
+      if (gen !== _testScanGen) return;
+      _testSeqBuf = [];
+      send('SET_LED:1:2').catch(() => {});
+      _setTestLED('flash-red');
+      _setTestMsg('Red flash — too slow, sequence reset.');
+      _testHistory.unshift({ cls: 'fail', text: 'too slow' });
+      if (_testHistory.length > 5) _testHistory.length = 5;
+      _renderTestHistory();
+      await delay(1200);
+      if (gen !== _testScanGen) return;
+      send('SET_LED:3:1').catch(() => {});
+      _autoTestLoop(gen);
+      return;
+    }
   } else {
-    result = { type: 'timeout' };
+    await scanPromise;
+    if (gen !== _testScanGen) return;
   }
 
-  // Drive the physical LED to match exactly what locked mode would show,
-  // then update the on-screen LED widget to the same colour.
+  _handleScanResult(scanLine, scanError, gen);
+}
+
+async function _handleScanResult(scanLine, scanError, gen) {
+  if (gen !== _testScanGen) return;
+
+  if (scanError || !scanLine || scanLine === 'OK:ABORTED' || scanLine.startsWith('FAIL:')) {
+    _setTestLED('idle');
+    _autoTestLoop(gen);
+    return;
+  }
+
+  let result;
+  if (scanLine.startsWith('SCANNED:')) {
+    result = _testMatchSlot(+scanLine.split(':')[1]);
+  } else {
+    _testSeqBuf = [];
+    result = { type: 'unenrolled' };
+  }
+
   if (result.type === 'match') {
-    send('SET_LED:2:2').catch(() => {});          // flash blue
+    send('SET_LED:2:2').catch(() => {});
     _setTestLED('flash-blue');
     _testHistory.unshift({ cls: 'match', text: result.pw.label || 'no label' });
   } else if (result.type === 'partial') {
-    send('SET_LED:3:2').catch(() => {});          // flash yellow
-    _setTestLED('flash-yellow');
-  } else if (result.type === 'no_match' || result.type === 'unenrolled') {
-    send('SET_LED:1:2').catch(() => {});          // flash red
+    send('SET_LED:3:2').catch(() => {});
+    _setTestLED('flash-pink');
+  } else {
+    send('SET_LED:1:2').catch(() => {});
     _setTestLED('flash-red');
     _testHistory.unshift({ cls: 'fail', text: result.type === 'unenrolled' ? 'not enrolled' : 'no match' });
-  } else {
-    _setTestLED('idle');
   }
-
   if (_testHistory.length > 5) _testHistory.length = 5;
   _renderTestHistory();
 
-  // After the flash settles, reset physical LED to setup-idle and screen to idle
-  if (result.type !== 'partial' && result.type !== 'timeout') {
-    const g = gen;
-    setTimeout(() => {
-      if (_testScanGen !== g) return;
-      send('SET_LED:3:1').catch(() => {});        // setup idle = solid yellow
-      _setTestLED('idle');
-    }, 1500);
-  }
+  await delay(1000);
+  if (gen !== _testScanGen) return;
+  send('SET_LED:3:1').catch(() => {});
 
-  scanBtn.disabled    = false;
-  scanBtn.textContent = result.type === 'partial'
-    ? `Scan Finger ${_testSeqBuf.length + 1}`
-    : 'Scan Again';
-  continueBtn.disabled = false;
-});
+  if (result.type === 'partial') {
+    _runSingleScan(gen);
+  } else {
+    _autoTestLoop(gen);
+  }
+}
 
 document.getElementById('btn-test-continue').addEventListener('click', async () => {
+  _testScanGen++;
   hideAlert('test-error');
-  _testScanGen++;  // cancel any in-flight scan
+  await _abortActiveScan();
 
   const btn = document.getElementById('btn-test-continue');
   btn.disabled    = true;
@@ -771,9 +833,10 @@ document.getElementById('btn-test-continue').addEventListener('click', async () 
   }
 });
 
-document.getElementById('btn-test-back').addEventListener('click', () => {
+document.getElementById('btn-test-back').addEventListener('click', async () => {
   _testScanGen++;
   _testSeqBuf = [];
+  await _abortActiveScan();
   goToStep(2);
   _renderPwList();
 });

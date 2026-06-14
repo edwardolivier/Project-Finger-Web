@@ -716,11 +716,11 @@ input[type="range"] {
   animation: flash-ring-blue .9s ease-out;
 }
 
-.sensor.led-flash-yellow {
-  border-color: var(--amber);
-  background: #fbbf24;
+.sensor.led-flash-pink {
+  border-color: #db2777;
+  background: #ec4899;
   color: #fff;
-  animation: flash-ring-yellow .9s ease-out;
+  animation: flash-ring-pink .9s ease-out;
 }
 
 .sensor.led-flash-red {
@@ -736,9 +736,9 @@ input[type="range"] {
   100% { box-shadow: none; }
 }
 
-@keyframes flash-ring-yellow {
-  0%   { box-shadow: 0 0 0 0 rgba(217,119,6,.75); }
-  60%  { box-shadow: 0 0 0 20px rgba(217,119,6,0); }
+@keyframes flash-ring-pink {
+  0%   { box-shadow: 0 0 0 0 rgba(236,72,153,.75); }
+  60%  { box-shadow: 0 0 0 20px rgba(236,72,153,0); }
   100% { box-shadow: none; }
 }
 
@@ -775,7 +775,7 @@ input[type="range"] {
 }
 
 .led-pip-blue   { background: var(--blue); box-shadow: 0 0 5px var(--blue); }
-.led-pip-yellow { background: #fbbf24;     box-shadow: 0 0 5px #fbbf24; }
+.led-pip-pink   { background: #ec4899;     box-shadow: 0 0 5px #ec4899; }
 .led-pip-red    { background: var(--red);  box-shadow: 0 0 5px var(--red); }
 
 /* ── Test history pills ──────────────────────────────────────────────────── */
